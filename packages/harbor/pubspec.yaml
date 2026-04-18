@@ -1,0 +1,13 @@
+name: harbor
+description: "ROHD extensions for physical implementation: ASIC tapeout flows, FPGA build support, and reusable components."
+version: 0.0.1
+repository: https://github.com/MidstallSoftware/harbor
+resolution: workspace
+environment:
+  sdk: ^3.11.2
+dependencies:
+  rohd: ^0.6.8
+  rohd_bridge: ^0.2.2
+  rohd_hcl: ^0.2.1
+dev_dependencies:
+  test: ^1.25.0

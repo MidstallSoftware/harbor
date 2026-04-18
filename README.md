@@ -1,2 +1,107 @@
-# harbor
-ROHD extensions for physical implementation: ASIC tapeout flows, FPGA build support, and reusable components.
+# Harbor
+
+A composable, declarative framework for building RISC-V SoCs using [ROHD](https://github.com/intel/rohd) and [rohd_bridge](https://github.com/intel/rohd_bridge). Harbor provides everything needed to go from SoC definition to silicon - FPGA synthesis, ASIC tapeout flows, Linux kernel drivers, and device tree generation.
+
+## Features
+
+### ISA Model
+
+- Full RVA23 RISC-V profile (RV64IMAFDHCVB + Zicsr, Zifencei, scalar crypto)
+- Declarative instruction definitions with resource modeling and micro-op sequences
+- Hardware instruction decoder generation from ISA config
+- Sv39/Sv48/Sv57 paging with two-stage translation for the H extension
+
+### SoC Infrastructure
+
+- **Bus fabric**: Wishbone, TileLink, AXI4 with arbiters, decoders, bridges, and crossbar generator
+- **Cache hierarchy**: Synthesizable L1I, L1D, L2 with MSI/MESI/MOESI coherency
+- **MMU**: TLB, hardware page table walker, PMP, PMA checker
+- **Clock management**: Clock domains, CDC primitives (sync, handshake, async FIFO), clock gating cells
+- **Interrupt routing**: Automatic wiring through PLIC, APLIC, or APLIC+IMSIC (AIA)
+- **Power domains**: PMU integration with automatic clock gate insertion per domain
+- **Boot sequencer**: Power-on reset through PLL lock, mask ROM, SPI flash load, DDR init, OpenSBI
+- **Debug**: JTAG TAP, DTM, RISC-V Debug Module (halt/resume, program buffer), E-Trace encoder
+
+### Peripherals
+
+| Category        | Peripherals                                                                                       |
+|-----------------|---------------------------------------------------------------------------------------------------|
+| Communication   | UART, SPI, I2C, Ethernet MAC, USB (host/device/OTG)                                               |
+| Storage         | Flash, SPI Flash (QSPI), SDIO, DDR3/4/5 controller, SRAM, MaskROM                                 |
+| Display & Media | Display controller (DRM/KMS), media engine (H.264/H.265/VP9/AV1/JPEG), audio (I2S/TDM/S/PDIF/PDM) |
+| System          | GPIO, PWM/Timer, Watchdog, DMA, PCIe (host + endpoint), temperature sensor                        |
+| Interrupts      | PLIC, APLIC, CLINT, IMSIC                                                                         |
+| Security        | IOMMU, crypto accelerator (AES/SHA/CLMUL), HPM counters                                           |
+| Power           | PMU with per-domain power gating, reset controller                                                |
+
+### Physical Implementation
+
+- **FPGA**: iCE40, ECP5, Xilinx 7-series with constraint file generation (PCF/LPF/XDC) and vendor primitive blackboxes (PLL, BRAM, DSP, XADC, DTR)
+- **ASIC**: Sky130 and GF180MCU PDKs with Yosys synthesis and OpenROAD place-and-route script generation
+- Device tree source (.dts) generation
+- SoC topology graphs (Mermaid and Graphviz DOT)
+
+### Linux Support
+
+15 kernel modules for Linux 7.0:
+
+```
+harbor_gpio    harbor_spi      harbor_i2c     harbor_sdhci
+harbor_dma     harbor_pwm      harbor_wdt     harbor_eth
+harbor_usb     harbor_display  harbor_pmu     harbor_pcie
+harbor_temp    harbor_media    harbor_audio
+```
+
+OpenSBI platform definition for firmware integration.
+
+## Quick Start
+
+```dart
+import 'package:harbor/harbor.dart';
+
+final soc = HarborSoC(
+  name: 'MySoC',
+  compatible: 'myproject,mysoc-v1',
+  busConfig: WishboneConfig(addressWidth: 32, dataWidth: 32),
+  cpus: [HarborDeviceTreeCpu(name: 'rv64', isa: 'rv64imafdc_zicsr_zifencei')],
+  target: HarborFpgaTarget.ecp5(
+    device: 'lfe5u-45f', package: 'CABGA381', frequency: 50000000,
+    pinMap: {'uart_tx': 'A2', 'uart_rx': 'B1'},
+  ),
+);
+
+soc.addPeripheral(HarborClint(baseAddress: 0x02000000));
+soc.addPeripheral(HarborPlic(baseAddress: 0x0C000000));
+soc.addPeripheral(HarborUart(baseAddress: 0x10000000));
+soc.addPeripheral(HarborGpio(baseAddress: 0x10001000, pinCount: 16));
+soc.addPeripheral(HarborSpiController(baseAddress: 0x10002000));
+soc.addPeripheral(HarborTemperatureSensor.fromTarget(
+  baseAddress: 0x10009000, target: soc.target!,
+));
+
+soc.buildFabric();
+await soc.generateAll(Directory('build/'));
+```
+
+This generates SystemVerilog RTL, a device tree, constraint files, and topology graphs - ready for synthesis.
+
+## Building
+
+### Dart
+
+```sh
+dart pub get
+dart analyze
+dart test
+```
+
+### Kernel Modules (Nix)
+
+```sh
+nix build .#harbor-kmod
+```
+
+## License
+
+Dart library: BSD-3-Clause
+Kernel modules: GPL-2.0-or-later

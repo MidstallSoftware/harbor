@@ -1,0 +1,15 @@
+BasedOnStyle: LLVM
+AlignAfterOpenBracket: Align
+AlignConsecutiveMacros: true
+AlignEscapedNewlines: Left
+AlignTrailingComments: true
+AllowShortFunctionsOnASingleLine: None
+BreakBeforeBraces: Linux
+ColumnLimit: 80
+IndentWidth: 8
+PointerAlignment: Right
+ReflowComments: false
+SortIncludes: false
+SpaceBeforeParens: ControlStatements
+TabWidth: 8
+UseTab: Always

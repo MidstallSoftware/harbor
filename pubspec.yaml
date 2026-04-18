@@ -1,0 +1,6 @@
+name: harbor_workspace
+publish_to: none
+environment:
+  sdk: ^3.11.2
+workspace:
+  - packages/harbor

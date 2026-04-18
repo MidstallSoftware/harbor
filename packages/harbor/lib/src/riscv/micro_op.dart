@@ -1,0 +1,310 @@
+/// Micro-operation types for RISC-V instruction execution.
+///
+/// Each [RiscVOperation] carries a list of [RiscVMicroOp]s describing its
+/// execution steps. These are pure data - the actual hardware
+/// implementation is provided by the CPU (e.g., River).
+
+/// Fields in the micro-op data path.
+///
+/// Used as references between micro-ops to specify where data
+/// comes from and goes to.
+enum RiscVMicroOpField {
+  rd(0),
+  rs1(1),
+  rs2(2),
+  rs3(3),
+  imm(4),
+  pc(5);
+
+  final int id;
+  const RiscVMicroOpField(this.id);
+}
+
+/// Data sources for micro-op operands.
+enum RiscVMicroOpSource {
+  alu(0),
+  imm(1),
+  rs1(2),
+  rs2(3),
+  pc(4),
+  rd(5);
+
+  final int id;
+  const RiscVMicroOpSource(this.id);
+}
+
+/// ALU function codes.
+enum RiscVAluFunct {
+  add,
+  sub,
+  and_,
+  or_,
+  xor_,
+  sll,
+  srl,
+  sra,
+  slt,
+  sltu,
+  mul,
+  mulh,
+  mulhsu,
+  mulhu,
+  div,
+  divu,
+  rem,
+  remu,
+  // 32-bit variants for RV64
+  addw,
+  subw,
+  sllw,
+  srlw,
+  sraw,
+  mulw,
+  divw,
+  divuw,
+  remw,
+  remuw,
+}
+
+/// RiscVBranch conditions.
+enum RiscVBranchCondition { eq, ne, lt, ge, ltu, geu }
+
+/// Memory access sizes.
+enum RiscVMemSize {
+  byte1(1),
+  half(2),
+  word(4),
+  dword(8),
+  qword(16);
+
+  final int bytes;
+  const RiscVMemSize(this.bytes);
+}
+
+/// Atomic memory operation functions.
+enum RiscVAtomicFunct { add, swap, xor_, and_, or_, min, max, minu, maxu }
+
+/// Floating-point rounding modes.
+enum RiscVFpRoundingMode {
+  rne(0), // Round to nearest, ties to even
+  rtz(1), // Round towards zero
+  rdn(2), // Round down
+  rup(3), // Round up
+  rmm(4), // Round to nearest, ties to max magnitude
+  dyn(7); // Dynamic (from fcsr)
+
+  final int value;
+  const RiscVFpRoundingMode(this.value);
+}
+
+/// Base class for all micro-operations.
+///
+/// All concrete types have const constructors and are pure data.
+sealed class RiscVMicroOp {
+  const RiscVMicroOp();
+}
+
+/// Read a value from a register into a micro-op field.
+class RiscVReadRegister extends RiscVMicroOp {
+  final RiscVMicroOpField source;
+  final int offset;
+
+  const RiscVReadRegister(this.source, {this.offset = 0});
+}
+
+/// Write a value to a register.
+class RiscVWriteRegister extends RiscVMicroOp {
+  final RiscVMicroOpField dest;
+  final RiscVMicroOpSource source;
+  final int valueOffset;
+
+  const RiscVWriteRegister(this.dest, this.source, {this.valueOffset = 0});
+}
+
+/// Read a CSR value.
+class RiscVReadCsr extends RiscVMicroOp {
+  final RiscVMicroOpField source;
+
+  const RiscVReadCsr(this.source);
+}
+
+/// Write a CSR value.
+class RiscVWriteCsr extends RiscVMicroOp {
+  final RiscVMicroOpField dest;
+  final RiscVMicroOpSource source;
+
+  const RiscVWriteCsr(this.dest, this.source);
+}
+
+/// Perform an ALU operation.
+class RiscVAlu extends RiscVMicroOp {
+  final RiscVAluFunct funct;
+  final RiscVMicroOpField a;
+  final RiscVMicroOpField b;
+
+  const RiscVAlu(this.funct, this.a, this.b);
+}
+
+/// Load from memory.
+class RiscVMemLoad extends RiscVMicroOp {
+  final RiscVMicroOpField base;
+  final RiscVMicroOpField dest;
+  final RiscVMemSize size;
+  final bool unsigned;
+
+  const RiscVMemLoad(this.base, this.dest, this.size, {this.unsigned = false});
+}
+
+/// Store to memory.
+class RiscVMemStore extends RiscVMicroOp {
+  final RiscVMicroOpField base;
+  final RiscVMicroOpField src;
+  final RiscVMemSize size;
+
+  const RiscVMemStore(this.base, this.src, this.size);
+}
+
+/// Load-reserved (for atomic sequences).
+class RiscVLoadReserved extends RiscVMicroOp {
+  final RiscVMicroOpField base;
+  final RiscVMicroOpField dest;
+  final RiscVMemSize size;
+
+  const RiscVLoadReserved(this.base, this.dest, this.size);
+}
+
+/// Store-conditional (for atomic sequences).
+class RiscVStoreConditional extends RiscVMicroOp {
+  final RiscVMicroOpField base;
+  final RiscVMicroOpField src;
+  final RiscVMicroOpField dest;
+  final RiscVMemSize size;
+
+  const RiscVStoreConditional(this.base, this.src, this.dest, this.size);
+}
+
+/// Atomic memory operation (AMO).
+class RiscVAtomicMemory extends RiscVMicroOp {
+  final RiscVAtomicFunct funct;
+  final RiscVMicroOpField base;
+  final RiscVMicroOpField src;
+  final RiscVMicroOpField dest;
+  final RiscVMemSize size;
+
+  const RiscVAtomicMemory(
+    this.funct,
+    this.base,
+    this.src,
+    this.dest,
+    this.size,
+  );
+}
+
+/// Conditional branch.
+class RiscVBranch extends RiscVMicroOp {
+  final RiscVBranchCondition condition;
+  final RiscVMicroOpSource target;
+  final RiscVMicroOpField? offsetField;
+  final int offset;
+
+  const RiscVBranch(
+    this.condition,
+    this.target, {
+    this.offsetField,
+    this.offset = 0,
+  });
+}
+
+/// Update the program counter.
+class RiscVUpdatePc extends RiscVMicroOp {
+  final RiscVMicroOpField source;
+  final int offset;
+  final RiscVMicroOpField? offsetField;
+  final RiscVMicroOpSource? offsetSource;
+  final bool absolute;
+  final bool align;
+
+  const RiscVUpdatePc(
+    this.source, {
+    this.offset = 0,
+    this.offsetField,
+    this.offsetSource,
+    this.absolute = false,
+    this.align = false,
+  });
+}
+
+/// Raise a trap/exception.
+class RiscVTrapOp extends RiscVMicroOp {
+  final int causeCode;
+  final bool isInterrupt;
+
+  const RiscVTrapOp(this.causeCode, {this.isInterrupt = false});
+}
+
+/// Return from exception handler (MRET, SRET, URET).
+class RiscVReturnOp extends RiscVMicroOp {
+  final int privilegeLevel; // 0=U, 1=S, 3=M
+
+  const RiscVReturnOp(this.privilegeLevel);
+}
+
+/// Memory fence.
+class RiscVFenceOp extends RiscVMicroOp {
+  const RiscVFenceOp();
+}
+
+/// TLB fence (SFENCE.VMA).
+class RiscVTlbFenceOp extends RiscVMicroOp {
+  const RiscVTlbFenceOp();
+}
+
+/// TLB invalidate.
+class RiscVTlbInvalidateOp extends RiscVMicroOp {
+  final RiscVMicroOpField addrField;
+  final RiscVMicroOpField asidField;
+
+  const RiscVTlbInvalidateOp(this.addrField, this.asidField);
+}
+
+/// Write link register (for JAL/JALR).
+class RiscVWriteLinkRegister extends RiscVMicroOp {
+  final RiscVMicroOpField dest;
+  final int pcOffset;
+
+  const RiscVWriteLinkRegister(this.dest, {this.pcOffset = 4});
+}
+
+/// Hold interrupt processing.
+class RiscVInterruptHold extends RiscVMicroOp {
+  const RiscVInterruptHold();
+}
+
+/// Wait for interrupt (WFI).
+class RiscVWaitForInterrupt extends RiscVMicroOp {
+  const RiscVWaitForInterrupt();
+}
+
+/// Hypervisor fence (HFENCE.VVMA / HFENCE.GVMA).
+class RiscVHypervisorFenceOp extends RiscVMicroOp {
+  final bool isGstage; // true = GVMA, false = VVMA
+
+  const RiscVHypervisorFenceOp({this.isGstage = false});
+}
+
+/// Hypervisor load/store virtual (HLV/HSV).
+class RiscVHypervisorMemOp extends RiscVMicroOp {
+  final RiscVMicroOpField base;
+  final RiscVMicroOpField dest;
+  final RiscVMemSize size;
+  final bool isStore;
+  final bool unsigned;
+
+  const RiscVHypervisorMemOp(
+    this.base,
+    this.dest,
+    this.size, {
+    this.isStore = false,
+    this.unsigned = false,
+  });
+}
