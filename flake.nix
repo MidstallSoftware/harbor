@@ -61,14 +61,16 @@
       overlays.default =
         final: prev:
         let
-          callPackage = lib.callPackageWith (
-            final
-            // {
-              flakever = flakeverConfig;
-            }
-          );
+          final' = final // {
+            flakever = flakeverConfig;
+          };
+
+          callPackage = lib.callPackageWith final';
+          callPackages = lib.callPackagesWith final';
         in
         {
+          harbor = callPackages ./nix { };
+
           linuxKernel = prev.linuxKernel // {
             packages = lib.mapAttrs (
               _name: prevLinuxPackages:

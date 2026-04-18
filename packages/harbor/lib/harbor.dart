@@ -57,6 +57,8 @@ export 'src/soc/target.dart';
 // PDK
 export 'src/pdk/analog_block.dart';
 export 'src/pdk/gf180mcu.dart';
+export 'src/pdk/io_ring.dart';
+export 'src/pdk/klayout.dart';
 export 'src/pdk/pdk_provider.dart';
 export 'src/pdk/sky130.dart';
 export 'src/pdk/standard_cell_library.dart';
@@ -128,6 +130,7 @@ export 'src/peripherals/ddr.dart';
 export 'src/peripherals/device_register.dart';
 export 'src/peripherals/display.dart';
 export 'src/peripherals/dma.dart';
+export 'src/peripherals/efuse.dart';
 export 'src/peripherals/ethernet.dart';
 export 'src/peripherals/flash.dart';
 export 'src/peripherals/gpio.dart';

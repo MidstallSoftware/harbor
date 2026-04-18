@@ -4,6 +4,7 @@ import 'package:rohd_bridge/rohd_bridge.dart';
 
 import '../bus/bus.dart';
 import '../bus/wishbone/wishbone_interface.dart';
+import '../pdk/klayout.dart';
 import 'device_tree.dart';
 import 'graph.dart';
 import 'target.dart';
@@ -277,6 +278,48 @@ class HarborSoC extends BridgeModule {
               ).writeAsStringSync(t.generateMacroOpenroadTcl(macro));
             }
           }
+
+          // KLayout scripts
+          final klayout = HarborKlayoutScripts(
+            pdkName: t.provider.name,
+            topCell: t.topCell,
+            drc: t.klayoutDrc,
+            lvsNetlistPath: '${t.topCell}_final.v',
+          );
+
+          final klayoutDir = Directory('$path/klayout');
+          klayoutDir.createSync(recursive: true);
+
+          // DEF to GDS conversion
+          final lib = t.provider.standardCellLibrary;
+          File('$path/klayout/def2gds.py').writeAsStringSync(
+            klayout.generateDefToGds(
+              defPath: '${t.topCell}_final.def',
+              techLefPath: lib.techLefPath ?? lib.lefPath,
+              outputGdsPath: '${t.topCell}.gds',
+            ),
+          );
+
+          // GDS merge (if analog blocks present)
+          if (t.analogGdsPaths.isNotEmpty) {
+            File('$path/klayout/gds_merge.py').writeAsStringSync(
+              klayout.generateGdsMerge(
+                digitalGdsPath: '${t.topCell}.gds',
+                analogGdsPaths: t.analogGdsPaths,
+                outputGdsPath: '${t.topCell}_merged.gds',
+              ),
+            );
+          }
+
+          // DRC
+          File(
+            '$path/klayout/drc.py',
+          ).writeAsStringSync(klayout.generateDrc(gdsPath: '${t.topCell}.gds'));
+
+          // LVS
+          File(
+            '$path/klayout/lvs.py',
+          ).writeAsStringSync(klayout.generateLvs(gdsPath: '${t.topCell}.gds'));
       }
     }
   }

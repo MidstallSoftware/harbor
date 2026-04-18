@@ -1,3 +1,5 @@
+import '../pdk/io_ring.dart';
+import '../pdk/klayout.dart';
 import '../pdk/pdk_provider.dart';
 
 /// Build target describing whether the SoC targets an FPGA or ASIC,
@@ -379,6 +381,15 @@ class HarborAsicTarget extends HarborDeviceTarget {
   /// used internally by macros to avoid DRC violations).
   final int topRoutingMinLayer;
 
+  /// IO ring configuration (null = no IO ring generation).
+  final HarborIoRing? ioRing;
+
+  /// KLayout scripts configuration (null = no KLayout scripts).
+  final HarborKlayoutDrcConfig? klayoutDrc;
+
+  /// Analog GDS files to merge into the final layout.
+  final List<String> analogGdsPaths;
+
   const HarborAsicTarget({
     required this.provider,
     required this.topCell,
@@ -387,6 +398,9 @@ class HarborAsicTarget extends HarborDeviceTarget {
     this.macros = const [],
     this.dieMarginUm = 200.0,
     this.topRoutingMinLayer = 2,
+    this.ioRing,
+    this.klayoutDrc,
+    this.analogGdsPaths = const [],
   });
 
   /// Whether this uses hierarchical macro hardening.

@@ -28,6 +28,7 @@ stdenv.mkDerivation {
       ../../packages/harbor_kmod/hwmon
       ../../packages/harbor_kmod/media
       ../../packages/harbor_kmod/audio
+      ../../packages/harbor_kmod/efuse
     ];
   };
 
@@ -54,7 +55,8 @@ stdenv.mkDerivation {
       pcie/harbor_pcie.ko \
       hwmon/harbor_temp.ko \
       media/harbor_media.ko \
-      audio/harbor_audio.ko
+      audio/harbor_audio.ko \
+      efuse/harbor_efuse.ko
     runHook postInstall
   '';
 

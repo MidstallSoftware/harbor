@@ -26,6 +26,7 @@ obj-m += pcie/harbor_pcie.o
 obj-m += hwmon/harbor_temp.o
 obj-m += media/harbor_media.o
 obj-m += audio/harbor_audio.o
+obj-m += efuse/harbor_efuse.o
 
 all:
 	$(MAKE) -C $(KDIR) M=$(PWD) modules

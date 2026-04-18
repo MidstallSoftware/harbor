@@ -27,32 +27,40 @@ A composable, declarative framework for building RISC-V SoCs using [ROHD](https:
 | Category        | Peripherals                                                                                       |
 |-----------------|---------------------------------------------------------------------------------------------------|
 | Communication   | UART, SPI, I2C, Ethernet MAC, USB (host/device/OTG)                                               |
-| Storage         | Flash, SPI Flash (QSPI), SDIO, SDR/DDR3/4/5 controller, SRAM, MaskROM                             |
+| Storage         | Flash, SPI Flash (QSPI), SDIO, SDR/DDR3/4/5 controller, SRAM, MaskROM, eFuse (OTP)                |
 | Display & Media | Display controller (DRM/KMS), media engine (H.264/H.265/VP9/AV1/JPEG), audio (I2S/TDM/S/PDIF/PDM) |
 | System          | GPIO, PWM/Timer, Watchdog, DMA, PCIe (host + endpoint), temperature sensor                        |
 | Interrupts      | PLIC, APLIC, CLINT, IMSIC                                                                         |
-| Security        | IOMMU, crypto accelerator (AES/SHA/CLMUL), HPM counters                                           |
+| Security        | IOMMU, crypto accelerator (AES/SHA/CLMUL), HPM counters, eFuse with configurable unlock key       |
 | Power           | PMU with per-domain power gating, reset controller                                                |
 
 ### Physical Implementation
 
 - **FPGA**: iCE40, ECP5, Xilinx 7-series with Yosys synthesis scripts, nextpnr commands, constraint files (PCF/LPF/XDC), Makefiles, and vendor primitive blackboxes (PLL, BRAM, DSP, XADC, DTR)
-- **ASIC**: Sky130 and GF180MCU PDKs with Yosys synthesis, OpenROAD place-and-route, hierarchical macro hardening (per-tile synthesis/PnR with LEF/LIB generation), and metal layer-aware top-level assembly
+- **ASIC**: Sky130 and GF180MCU PDKs with Yosys synthesis, OpenROAD place-and-route, hierarchical macro hardening (per-tile synthesis/PnR with LEF/LIB generation), metal layer-aware top-level assembly, IO ring/pad frame generation, and KLayout GDS merge/DRC/LVS scripts
 - Device tree source (.dts) generation
 - SoC topology graphs (Mermaid and Graphviz DOT)
 
 ### Linux Support
 
-15 kernel modules for Linux 7.0:
+16 kernel modules for Linux 7.0:
 
 ```
 harbor_gpio    harbor_spi      harbor_i2c     harbor_sdhci
 harbor_dma     harbor_pwm      harbor_wdt     harbor_eth
 harbor_usb     harbor_display  harbor_pmu     harbor_pcie
-harbor_temp    harbor_media    harbor_audio
+harbor_temp    harbor_media    harbor_audio   harbor_efuse
 ```
 
 OpenSBI platform definition for firmware integration.
+
+### Nix Build Infrastructure
+
+Composable builder functions for hardware projects:
+
+- `harbor.mkIp` - generate RTL and build scripts from a Dart/Harbor SoC definition
+- `harbor.mkSynth` - FPGA synthesis + PnR + bitstream (Yosys + nextpnr)
+- `harbor.mkTapeout` - ASIC tapeout flow with hierarchical macro hardening (Yosys + OpenROAD + KLayout)
 
 ## Quick Start
 
@@ -128,7 +136,39 @@ dart test
 nix build .#harbor-kmod
 ```
 
+### FPGA Synthesis (Nix)
+
+```nix
+my-soc-synth = pkgs.harbor.mkSynth {
+  ip = my-soc-ip;
+  topCell = "MySoC";
+  vendor = "ecp5";
+  device = "lfe5u-45f";
+  package_ = "CABGA381";
+  frequency = 50000000;
+};
+```
+
+### ASIC Tapeout (Nix)
+
+```nix
+my-soc-tapeout = pkgs.harbor.mkTapeout {
+  ip = my-soc-ip;
+  topCell = "MySoC";
+  pdk = pkgs.sky130-pdk;
+  cellLib = "sky130_fd_sc_hd";
+  clockPeriodNs = 20;
+  macros = [ "RiverCore" "L2Cache" ];
+};
+```
+
 ## License
 
 Dart library: BSD-3-Clause
+
 Kernel modules: GPL-2.0-or-later
+
+## Community
+
+- **Discord**: [Join the server](https://discord.gg/HRhetTVcHG)
+- **Contact**: [inquire@midstall.com](mailto:inquire@midstall.com)
