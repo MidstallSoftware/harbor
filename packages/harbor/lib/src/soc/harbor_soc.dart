@@ -257,10 +257,26 @@ class HarborSoC extends BridgeModule {
           File(
             '$path/$name.${t.constraintExtension}',
           ).writeAsStringSync(t.generateConstraints());
+          File('$path/synth.tcl').writeAsStringSync(t.generateYosysTcl(name));
+          File('$path/Makefile').writeAsStringSync(t.generateMakefile(name));
         case HarborAsicTarget():
           File('$path/$name.sdc').writeAsStringSync(t.generateSdc());
           File('$path/synth.tcl').writeAsStringSync(t.generateYosysTcl());
           File('$path/pnr.tcl').writeAsStringSync(t.generateOpenroadTcl());
+
+          // Hierarchical macro scripts
+          if (t.isHierarchical) {
+            final macroDir = Directory('$path/macros');
+            macroDir.createSync(recursive: true);
+            for (final macro in t.macros) {
+              File(
+                '$path/macros/${macro.moduleName}_synth.tcl',
+              ).writeAsStringSync(t.generateMacroYosysTcl(macro));
+              File(
+                '$path/macros/${macro.moduleName}_pnr.tcl',
+              ).writeAsStringSync(t.generateMacroOpenroadTcl(macro));
+            }
+          }
       }
     }
   }

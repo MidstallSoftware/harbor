@@ -27,7 +27,7 @@ A composable, declarative framework for building RISC-V SoCs using [ROHD](https:
 | Category        | Peripherals                                                                                       |
 |-----------------|---------------------------------------------------------------------------------------------------|
 | Communication   | UART, SPI, I2C, Ethernet MAC, USB (host/device/OTG)                                               |
-| Storage         | Flash, SPI Flash (QSPI), SDIO, DDR3/4/5 controller, SRAM, MaskROM                                 |
+| Storage         | Flash, SPI Flash (QSPI), SDIO, SDR/DDR3/4/5 controller, SRAM, MaskROM                             |
 | Display & Media | Display controller (DRM/KMS), media engine (H.264/H.265/VP9/AV1/JPEG), audio (I2S/TDM/S/PDIF/PDM) |
 | System          | GPIO, PWM/Timer, Watchdog, DMA, PCIe (host + endpoint), temperature sensor                        |
 | Interrupts      | PLIC, APLIC, CLINT, IMSIC                                                                         |
@@ -36,8 +36,8 @@ A composable, declarative framework for building RISC-V SoCs using [ROHD](https:
 
 ### Physical Implementation
 
-- **FPGA**: iCE40, ECP5, Xilinx 7-series with constraint file generation (PCF/LPF/XDC) and vendor primitive blackboxes (PLL, BRAM, DSP, XADC, DTR)
-- **ASIC**: Sky130 and GF180MCU PDKs with Yosys synthesis and OpenROAD place-and-route script generation
+- **FPGA**: iCE40, ECP5, Xilinx 7-series with Yosys synthesis scripts, nextpnr commands, constraint files (PCF/LPF/XDC), Makefiles, and vendor primitive blackboxes (PLL, BRAM, DSP, XADC, DTR)
+- **ASIC**: Sky130 and GF180MCU PDKs with Yosys synthesis, OpenROAD place-and-route, hierarchical macro hardening (per-tile synthesis/PnR with LEF/LIB generation), and metal layer-aware top-level assembly
 - Device tree source (.dts) generation
 - SoC topology graphs (Mermaid and Graphviz DOT)
 
@@ -57,33 +57,60 @@ OpenSBI platform definition for firmware integration.
 ## Quick Start
 
 ```dart
+import 'dart:io';
 import 'package:harbor/harbor.dart';
+import 'package:river/river.dart'; // your CPU core
 
-final soc = HarborSoC(
-  name: 'MySoC',
-  compatible: 'myproject,mysoc-v1',
-  busConfig: WishboneConfig(addressWidth: 32, dataWidth: 32),
-  cpus: [HarborDeviceTreeCpu(name: 'rv64', isa: 'rv64imafdc_zicsr_zifencei')],
-  target: HarborFpgaTarget.ecp5(
+Future<void> main() async {
+  final target = HarborFpgaTarget.ecp5(
     device: 'lfe5u-45f', package: 'CABGA381', frequency: 50000000,
     pinMap: {'uart_tx': 'A2', 'uart_rx': 'B1'},
-  ),
-);
+  );
 
-soc.addPeripheral(HarborClint(baseAddress: 0x02000000));
-soc.addPeripheral(HarborPlic(baseAddress: 0x0C000000));
-soc.addPeripheral(HarborUart(baseAddress: 0x10000000));
-soc.addPeripheral(HarborGpio(baseAddress: 0x10001000, pinCount: 16));
-soc.addPeripheral(HarborSpiController(baseAddress: 0x10002000));
-soc.addPeripheral(HarborTemperatureSensor.fromTarget(
-  baseAddress: 0x10009000, target: soc.target!,
-));
+  final soc = HarborSoC(
+    name: 'MySoC',
+    compatible: 'myproject,mysoc-v1',
+    busConfig: WishboneConfig(addressWidth: 32, dataWidth: 32),
+    cpus: [HarborDeviceTreeCpu(name: 'rv64', isa: 'rv64imafdc_zicsr_zifencei')],
+    target: target,
+  );
 
-soc.buildFabric();
-await soc.generateAll(Directory('build/'));
+  // CPU core (River or any BridgeModule with a Wishbone master interface)
+  final core = RiverCore(isa: RiscVIsaConfig(
+    mxlen: RiscVMxlen.rv64,
+    extensions: rva23Extensions,
+  ));
+  soc.addMaster(core);
+
+  // Peripherals
+  soc.addPeripheral(HarborClint(baseAddress: 0x02000000));
+  soc.addPeripheral(HarborPlic(baseAddress: 0x0C000000, sources: 32, contexts: 1));
+  soc.addPeripheral(HarborUart(baseAddress: 0x10000000));
+  soc.addPeripheral(HarborGpio(baseAddress: 0x10001000, pinCount: 16));
+  soc.addPeripheral(HarborSpiController(baseAddress: 0x10002000));
+  soc.addPeripheral(HarborSram(baseAddress: 0x00000000, size: 64 * 1024));
+  soc.addPeripheral(HarborTemperatureSensor.fromTarget(
+    baseAddress: 0x10009000, target: target,
+  ));
+
+  // Wire interrupts
+  final routing = HarborInterruptRouting.plic(
+    plic: soc.peripherals.whereType<HarborPlic>().first,
+  );
+  routing.connectSources(soc.peripherals);
+
+  soc.buildFabric();
+  await soc.generateAll(Directory('build/'));
+}
 ```
 
-This generates SystemVerilog RTL, a device tree, constraint files, and topology graphs - ready for synthesis.
+This generates:
+- `rtl/` - SystemVerilog RTL
+- `MySoC.dts` - device tree source
+- `MySoC.lpf` - ECP5 pin constraints
+- `synth.tcl` - Yosys synthesis script (`synth_ecp5`)
+- `Makefile` - complete build flow (synth -> nextpnr -> ecppack)
+- `MySoC.dot` / `MySoC.mermaid.md` - topology graphs
 
 ## Building
 
