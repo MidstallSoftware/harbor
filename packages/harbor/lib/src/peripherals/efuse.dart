@@ -55,7 +55,7 @@ class HarborEfuseBlock extends BridgeModule {
   Logic get addr => output('addr');
   Logic get wdata => output('wdata');
   Logic get read_ => output('read');
-  Logic get program => output('program');
+  Logic get pgm => output('pgm');
   Logic get rdata => input('rdata');
   Logic get done => input('done');
   Logic get lock => output('lock');
@@ -69,7 +69,7 @@ class HarborEfuseBlock extends BridgeModule {
     addOutput('addr', width: config.words.bitLength);
     addOutput('wdata', width: config.bitsPerWord);
     addOutput('read');
-    addOutput('program');
+    addOutput('pgm');
     createPort('rdata', PortDirection.input, width: config.bitsPerWord);
     createPort('done', PortDirection.input);
     addOutput('lock', width: config.regions);
@@ -108,7 +108,7 @@ class HarborEfuseBlock extends BridgeModule {
           output('addr') < Const(0, width: config.words.bitLength),
           output('wdata') < Const(0, width: config.bitsPerWord),
           output('read') < Const(0),
-          output('program') < Const(0),
+          output('pgm') < Const(0),
           output('req_done') < Const(0),
           output('req_error') < Const(0),
           output('req_rdata') < Const(0, width: config.bitsPerWord),
@@ -126,7 +126,7 @@ class HarborEfuseBlock extends BridgeModule {
                 then: [
                   busyReg < Const(0),
                   output('read') < Const(0),
-                  output('program') < Const(0),
+                  output('pgm') < Const(0),
                   output('req_done') < Const(1),
                   rdataReg < input('rdata'),
                   output('req_rdata') < input('rdata'),
@@ -138,7 +138,7 @@ class HarborEfuseBlock extends BridgeModule {
                 then: [
                   busyReg < Const(0),
                   output('read') < Const(0),
-                  output('program') < Const(0),
+                  output('pgm') < Const(0),
                   output('req_error') < Const(1),
                 ],
               ),
@@ -161,7 +161,7 @@ class HarborEfuseBlock extends BridgeModule {
                   counter < Const(0, width: 16),
                   output('addr') < input('req_addr'),
                   output('wdata') < input('req_wdata'),
-                  output('program') < Const(1),
+                  output('pgm') < Const(1),
                 ],
               ),
             ],
@@ -227,7 +227,7 @@ class HarborEfuseDevice extends BridgeModule with HarborDeviceTreeNodeProvider {
     addOutput('fuse_addr', width: config.words.bitLength);
     addOutput('fuse_wdata', width: config.bitsPerWord);
     addOutput('fuse_read');
-    addOutput('fuse_program');
+    addOutput('fuse_pgm');
     addOutput('fuse_lock', width: config.regions);
 
     bus = BusSlavePort.create(
@@ -279,7 +279,7 @@ class HarborEfuseDevice extends BridgeModule with HarborDeviceTreeNodeProvider {
           reqProgram < Const(0),
           pulseCounter < Const(0, width: 16),
           output('fuse_read') < Const(0),
-          output('fuse_program') < Const(0),
+          output('fuse_pgm') < Const(0),
           bus.ack < Const(0),
           bus.dataOut < Const(0, width: 32),
         ],
@@ -297,7 +297,7 @@ class HarborEfuseDevice extends BridgeModule with HarborDeviceTreeNodeProvider {
                   busy < Const(0),
                   doneFlag < Const(1),
                   output('fuse_read') < Const(0),
-                  output('fuse_program') < Const(0),
+                  output('fuse_pgm') < Const(0),
                   rdata < input('fuse_rdata'),
                 ],
               ),
@@ -308,7 +308,7 @@ class HarborEfuseDevice extends BridgeModule with HarborDeviceTreeNodeProvider {
                   busy < Const(0),
                   errorFlag < Const(1),
                   output('fuse_read') < Const(0),
-                  output('fuse_program') < Const(0),
+                  output('fuse_pgm') < Const(0),
                 ],
               ),
             ],
@@ -328,7 +328,7 @@ class HarborEfuseDevice extends BridgeModule with HarborDeviceTreeNodeProvider {
             then: [
               busy < Const(1),
               pulseCounter < Const(0, width: 16),
-              output('fuse_program') < Const(1),
+              output('fuse_pgm') < Const(1),
             ],
           ),
 

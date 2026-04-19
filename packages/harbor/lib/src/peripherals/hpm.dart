@@ -212,6 +212,39 @@ class HarborHpmCounters extends BridgeModule {
     ]);
 
     // CSR read mux
-    output('csr_rdata') <= Const(0, width: 64); // placeholder
+    final csrAddr = input('csr_addr');
+    Logic csrRdata = Const(0, width: 64);
+
+    // mcycle = 0xB00, minstret = 0xB02
+    csrRdata = mux(
+      csrAddr.eq(Const(0xB00, width: 12)),
+      mcycle.zeroExtend(64),
+      csrRdata,
+    );
+    csrRdata = mux(
+      csrAddr.eq(Const(0xB02, width: 12)),
+      minstret.zeroExtend(64),
+      csrRdata,
+    );
+
+    // mhpmcounter3-31 = 0xB03-0xB1F
+    for (var i = 0; i < numCounters; i++) {
+      csrRdata = mux(
+        csrAddr.eq(Const(0xB03 + i, width: 12)),
+        counters[i].zeroExtend(64),
+        csrRdata,
+      );
+    }
+
+    // mhpmevent3-31 = 0x323-0x33F
+    for (var i = 0; i < numCounters; i++) {
+      csrRdata = mux(
+        csrAddr.eq(Const(0x323 + i, width: 12)),
+        events[i],
+        csrRdata,
+      );
+    }
+
+    output('csr_rdata') <= csrRdata;
   }
 }

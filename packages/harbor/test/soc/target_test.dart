@@ -1,0 +1,212 @@
+import 'package:harbor/harbor.dart';
+import 'package:test/test.dart';
+
+void main() {
+  group('HarborFpgaTarget.ice40', () {
+    late HarborFpgaTarget target;
+
+    setUp(() {
+      target = const HarborFpgaTarget.ice40(
+        device: 'up5k',
+        package: 'sg48',
+        frequency: 48000000,
+        pinMap: {'clk': '35', 'uart_tx': '1'},
+      );
+    });
+
+    test('name', () {
+      expect(target.name, equals('ice40-up5k'));
+    });
+
+    test('vendor', () {
+      expect(target.vendor, equals(HarborFpgaVendor.ice40));
+    });
+
+    test('constraintExtension is pcf', () {
+      expect(target.constraintExtension, equals('pcf'));
+    });
+
+    test('hasTemperatureSensor is false', () {
+      expect(target.hasTemperatureSensor, isFalse);
+    });
+
+    test('hasEfuse is false', () {
+      expect(target.hasEfuse, isFalse);
+    });
+  });
+
+  group('HarborFpgaTarget.ecp5', () {
+    late HarborFpgaTarget target;
+
+    setUp(() {
+      target = const HarborFpgaTarget.ecp5(
+        device: 'lfe5u-45f',
+        package: 'CABGA381',
+        frequency: 50000000,
+        pinMap: {'clk': 'A10'},
+      );
+    });
+
+    test('name', () {
+      expect(target.name, equals('ecp5-lfe5u-45f'));
+    });
+
+    test('vendor', () {
+      expect(target.vendor, equals(HarborFpgaVendor.ecp5));
+    });
+
+    test('constraintExtension is lpf', () {
+      expect(target.constraintExtension, equals('lpf'));
+    });
+
+    test('hasTemperatureSensor is true', () {
+      expect(target.hasTemperatureSensor, isTrue);
+    });
+
+    test('hasEfuse is true', () {
+      expect(target.hasEfuse, isTrue);
+    });
+  });
+
+  group('HarborFpgaTarget.spartan7', () {
+    test('vivado vendor by default', () {
+      const target = HarborFpgaTarget.spartan7(
+        device: 'xc7s50',
+        package: 'ftgb196',
+      );
+      expect(target.vendor, equals(HarborFpgaVendor.vivado));
+      expect(target.constraintExtension, equals('xdc'));
+    });
+
+    test('openXc7 vendor when flag set', () {
+      const target = HarborFpgaTarget.spartan7(
+        device: 'xc7s50',
+        package: 'ftgb196',
+        useOpenXc7: true,
+      );
+      expect(target.vendor, equals(HarborFpgaVendor.openXc7));
+      expect(target.constraintExtension, equals('xdc'));
+    });
+  });
+
+  group('HarborFpgaTarget generation', () {
+    test('generateConstraints returns non-empty string', () {
+      const target = HarborFpgaTarget.ice40(
+        device: 'up5k',
+        package: 'sg48',
+        pinMap: {'clk': '35'},
+      );
+      final result = target.generateConstraints();
+      expect(result, isNotEmpty);
+    });
+
+    test('generateYosysTcl contains synth target', () {
+      const target = HarborFpgaTarget.ice40(device: 'up5k', package: 'sg48');
+      final result = target.generateYosysTcl('TopCell');
+      expect(result, contains('synth_ice40'));
+    });
+
+    test('generateYosysTcl ecp5 contains synth target', () {
+      const target = HarborFpgaTarget.ecp5(
+        device: 'lfe5u-45f',
+        package: 'CABGA381',
+      );
+      final result = target.generateYosysTcl('TopCell');
+      expect(result, contains('synth_ecp5'));
+    });
+
+    test('generateNextpnrCommand returns non-null for ice40', () {
+      const target = HarborFpgaTarget.ice40(device: 'up5k', package: 'sg48');
+      final result = target.generateNextpnrCommand('TopCell');
+      expect(result, isNotNull);
+      expect(result, contains('nextpnr-ice40'));
+    });
+
+    test('generateNextpnrCommand returns non-null for ecp5', () {
+      const target = HarborFpgaTarget.ecp5(
+        device: 'lfe5u-45f',
+        package: 'CABGA381',
+      );
+      final result = target.generateNextpnrCommand('TopCell');
+      expect(result, isNotNull);
+      expect(result, contains('nextpnr-ecp5'));
+    });
+
+    test('generateMakefile returns string with all: target', () {
+      const target = HarborFpgaTarget.ice40(device: 'up5k', package: 'sg48');
+      final result = target.generateMakefile('TopCell');
+      expect(result, contains('all:'));
+    });
+  });
+
+  group('HarborAsicTarget', () {
+    late Sky130Provider pdk;
+
+    setUp(() {
+      pdk = Sky130Provider(pdkRoot: '/pdk/sky130A');
+    });
+
+    test('name', () {
+      final target = HarborAsicTarget(provider: pdk, topCell: 'MySoC');
+      expect(target.name, equals('SkyWater SKY130-130nm'));
+    });
+
+    test('isHierarchical false when no macros', () {
+      final target = HarborAsicTarget(provider: pdk, topCell: 'MySoC');
+      expect(target.isHierarchical, isFalse);
+    });
+
+    test('isHierarchical true when macros present', () {
+      final target = HarborAsicTarget(
+        provider: pdk,
+        topCell: 'MySoC',
+        macros: const [HarborAsicMacro(moduleName: 'Core')],
+      );
+      expect(target.isHierarchical, isTrue);
+    });
+
+    test('generateSdc contains create_clock', () {
+      final target = HarborAsicTarget(
+        provider: pdk,
+        topCell: 'MySoC',
+        frequency: 50000000,
+      );
+      final sdc = target.generateSdc();
+      expect(sdc, contains('create_clock'));
+    });
+
+    test('generateYosysTcl contains synth', () {
+      final target = HarborAsicTarget(provider: pdk, topCell: 'MySoC');
+      final tcl = target.generateYosysTcl();
+      expect(tcl, contains('synth'));
+    });
+
+    test('generateOpenroadTcl contains read_liberty', () {
+      final target = HarborAsicTarget(provider: pdk, topCell: 'MySoC');
+      final tcl = target.generateOpenroadTcl();
+      expect(tcl, contains('read_liberty'));
+    });
+  });
+
+  group('HarborAsicMacro', () {
+    test('moduleName', () {
+      const macro = HarborAsicMacro(moduleName: 'RiverCore');
+      expect(macro.moduleName, equals('RiverCore'));
+    });
+
+    test('default utilization', () {
+      const macro = HarborAsicMacro(moduleName: 'RiverCore');
+      expect(macro.utilization, equals(0.6));
+    });
+  });
+
+  group('HarborFpgaVendor', () {
+    test('has 4 values', () {
+      expect(HarborFpgaVendor.values, hasLength(4));
+      expect(HarborFpgaVendor.values, contains(HarborFpgaVendor.ice40));
+      expect(HarborFpgaVendor.values, contains(HarborFpgaVendor.ecp5));
+      expect(HarborFpgaVendor.values, contains(HarborFpgaVendor.vivado));
+      expect(HarborFpgaVendor.values, contains(HarborFpgaVendor.openXc7));
+    });
+  });
+}

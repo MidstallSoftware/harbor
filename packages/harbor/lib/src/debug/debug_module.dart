@@ -180,7 +180,51 @@ class HarborDebugModule extends BridgeModule with HarborDeviceTreeNodeProvider {
     ]);
 
     // Build dmstatus from hart states
-    dmstatus <= Const(0, width: 32); // placeholder
+    // dmstatus layout (RISC-V Debug Spec 1.0):
+    // [31:23] reserved
+    // [22] impebreak
+    // [21:20] reserved
+    // [19] allhavereset  [18] anyhavereset
+    // [17] allresumeack  [16] anyresumeack
+    // [15] allnonexistent [14] anynonexistent
+    // [13] allunavail    [12] anyunavail
+    // [11] allrunning    [10] anyrunning
+    // [9]  allhalted     [8]  anyhalted
+    // [7]  authenticated [6]  authbusy
+    // [5]  hasresethaltreq [4] confstrptrvalid
+    // [3:0] version = 3 (debug spec 1.0)
+    Logic anyHalted = Const(0);
+    Logic allHalted = Const(1);
+    Logic anyRunning = Const(0);
+    Logic allRunning = Const(1);
+    Logic anyUnavail = Const(0);
+    Logic allUnavail = Const(1);
+    for (var i = 0; i < numHarts; i++) {
+      anyHalted = anyHalted | input('hart${i}_halted');
+      allHalted = allHalted & input('hart${i}_halted');
+      anyRunning = anyRunning | input('hart${i}_running');
+      allRunning = allRunning & input('hart${i}_running');
+      anyUnavail = anyUnavail | input('hart${i}_unavail');
+      allUnavail = allUnavail & input('hart${i}_unavail');
+    }
+    dmstatus <=
+        [
+          Const(0, width: 10), // [31:22] reserved + impebreak
+          Const(0, width: 4), // [21:18] havereset/resumeack
+          Const(0, width: 2), // [17:16] nonexistent (both zero)
+          Const(0, width: 2), // [15:14] nonexistent (both zero)
+          allUnavail, // [13]
+          anyUnavail, // [12]
+          allRunning, // [11]
+          anyRunning, // [10]
+          allHalted, // [9]
+          anyHalted, // [8]
+          Const(1), // [7] authenticated (always)
+          Const(0), // [6] authbusy
+          Const(1), // [5] hasresethaltreq
+          Const(0), // [4] confstrptrvalid
+          Const(3, width: 4), // [3:0] version = 3
+        ].swizzle();
 
     // Hart control defaults
     for (var i = 0; i < numHarts; i++) {

@@ -7,11 +7,12 @@ import '../soc/device_tree.dart';
 
 /// On-chip SRAM memory module.
 ///
-/// Provides a simple single-cycle read/write memory with a Wishbone
-/// slave interface. Compatible with the `sram` device tree binding.
+/// Provides single-cycle read/write memory with a bus slave interface.
+/// Uses a register array that synthesis tools infer as block RAM
+/// on FPGAs.
 ///
-/// For FPGA targets, this infers block RAM. For larger memories,
-/// use vendor-specific blackbox primitives (SB_SPRAM256KA, etc.).
+/// For larger memories or explicit BRAM control, use vendor-specific
+/// blackbox primitives (Ice40SbSpram256ka, XilinxRamb36e1, etc.).
 class HarborSram extends BridgeModule with HarborDeviceTreeNodeProvider {
   /// Memory size in bytes.
   final int size;
@@ -35,13 +36,19 @@ class HarborSram extends BridgeModule with HarborDeviceTreeNodeProvider {
     createPort('clk', PortDirection.input);
     createPort('reset', PortDirection.input);
 
-    final addrWidth = (size ~/ (dataWidth ~/ 8)).bitLength;
+    final bytesPerWord = dataWidth ~/ 8;
+    final numWords = size ~/ bytesPerWord;
+    final addrWidth = numWords.bitLength;
+    // Number of address bits used for byte offset within a word
+    // e.g., 4 bytes -> 2 bits, 8 bytes -> 3 bits
+    final byteOffsetBits = bytesPerWord > 1 ? (bytesPerWord - 1).bitLength : 0;
+    final totalAddrWidth = addrWidth + byteOffsetBits;
 
     bus = BusSlavePort.create(
       module: this,
       name: 'bus',
       protocol: protocol,
-      addressWidth: addrWidth,
+      addressWidth: totalAddrWidth,
       dataWidth: dataWidth,
     );
 
@@ -50,38 +57,58 @@ class HarborSram extends BridgeModule with HarborDeviceTreeNodeProvider {
     final ack = bus.ack;
     final stb = bus.stb;
     final we = bus.we;
+    final addr = bus.addr;
+    final datIn = bus.dataIn;
 
-    // Memory placeholder - synthesis tools infer block RAM from
-    // the sequential read/write pattern
-    final mem = Logic(name: 'mem', width: dataWidth);
+    // Word address (strip byte offset bits)
+    final wordAddr = byteOffsetBits > 0
+        ? addr.getRange(byteOffsetBits, byteOffsetBits + addrWidth)
+        : addr.getRange(0, addrWidth);
+
+    // Memory array - synthesis tools infer block RAM from this pattern:
+    // synchronous read + synchronous write on the same clock edge
+    final mem = <Logic>[
+      for (var i = 0; i < numWords; i++)
+        Logic(name: 'mem_$i', width: dataWidth),
+    ];
+
+    // Read data mux
+    Logic readData = Const(0, width: dataWidth);
+    for (var i = 0; i < numWords; i++) {
+      readData = mux(
+        wordAddr.eq(Const(i, width: wordAddr.width)),
+        mem[i],
+        readData,
+      );
+    }
 
     Sequential(clk, [
       ack < Const(0),
       datOut < Const(0, width: dataWidth),
+
       If(
         stb & ~ack,
         then: [
           ack < Const(1),
+
           If(
             we,
             then: [
-              // Write - actual memory write would be inferred
-              // from the synthesis tool's RAM inference
+              // Write: store data to the addressed word
+              for (var i = 0; i < numWords; i++)
+                If(
+                  wordAddr.eq(Const(i, width: wordAddr.width)),
+                  then: [mem[i] < datIn],
+                ),
             ],
             orElse: [
-              // Read
-              datOut < mem,
+              // Read: output data from the addressed word
+              datOut < readData,
             ],
           ),
         ],
       ),
     ]);
-
-    // Note: actual RAM inference depends on the synthesis tool.
-    // The sequential read/write pattern above should infer BRAM
-    // on most FPGA toolchains. For explicit control, use
-    // vendor-specific blackbox primitives.
-    mem <= Const(0, width: dataWidth);
   }
 
   @override
