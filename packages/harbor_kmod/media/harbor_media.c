@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: GPL-2.0-or-later
 /*
- * Harbor Media Engine driver (V4L2 M2M)
+ * Harbor Media Engine driver
+ *
+ * Uses V4L2 M2M when CONFIG_V4L2_MEM2MEM_DEV is enabled for
+ * out-of-the-box FFmpeg/GStreamer/Chromium support.
+ * Falls back to miscdevice + ioctl when V4L2 M2M is not available.
  *
  * Global registers:
  *   0x000: ENGINE_CTRL   0x004: ENGINE_STATUS  0x008: ENGINE_CAPS
@@ -11,20 +15,22 @@
  *   +0x0C: SESS_SRC_SIZE +0x10: SESS_DST_ADDR +0x14: SESS_DST_SIZE
  *   +0x18: SESS_WIDTH    +0x1C: SESS_HEIGHT   +0x20: SESS_PIXEL_FMT
  *   +0x24: SESS_BITRATE  +0x28: SESS_QP       +0x2C: SESS_RC_MODE
- *   +0x30: SESS_FPS      +0x34: SESS_FPS_DEN  +0x38: SESS_GOP_SIZE
- *   +0x3C: SESS_REF_FRAMES +0x40: SESS_PROFILE +0x44: SESS_LEVEL
- *   +0x48: SESS_BYTES_DONE +0x4C: SESS_FRAMES_DONE
  */
 
 #include <linux/module.h>
 #include <linux/platform_device.h>
+#include <linux/miscdevice.h>
 #include <linux/io.h>
 #include <linux/of.h>
 #include <linux/interrupt.h>
+#include <linux/fs.h>
+
+#if IS_ENABLED(CONFIG_V4L2_MEM2MEM_DEV)
 #include <media/v4l2-device.h>
 #include <media/v4l2-mem2mem.h>
 #include <media/v4l2-ioctl.h>
-#include <media/videobuf2-dma-contig.h>
+#define HARBOR_MEDIA_V4L2 1
+#endif
 
 #define HARBOR_MEDIA_ENGINE_CTRL   0x000
 #define HARBOR_MEDIA_ENGINE_STATUS 0x004
@@ -37,41 +43,23 @@
 #define HARBOR_MEDIA_SESS_CTRL	   0x00
 #define HARBOR_MEDIA_SESS_STATUS   0x04
 #define HARBOR_MEDIA_SESS_SRC_ADDR 0x08
-#define HARBOR_MEDIA_SESS_SRC_SIZE 0x0C
-#define HARBOR_MEDIA_SESS_DST_ADDR 0x10
-#define HARBOR_MEDIA_SESS_DST_SIZE 0x14
-#define HARBOR_MEDIA_SESS_WIDTH	   0x18
-#define HARBOR_MEDIA_SESS_HEIGHT   0x1C
-#define HARBOR_MEDIA_SESS_PIX_FMT  0x20
 
-/* Codec format indices (match HarborCodecFormat enum) */
-#define HARBOR_CODEC_H264 0
-#define HARBOR_CODEC_H265 1
-#define HARBOR_CODEC_VP9  2
-#define HARBOR_CODEC_AV1  3
-#define HARBOR_CODEC_JPEG 4
-
-/* Session control bits */
 #define HARBOR_SESS_START  BIT(0)
-#define HARBOR_SESS_ABORT  BIT(1)
 #define HARBOR_SESS_DECODE (0 << 4)
 #define HARBOR_SESS_ENCODE (1 << 4)
 
 struct harbor_media {
 	void __iomem *base;
-	struct v4l2_device v4l2_dev;
-	struct v4l2_m2m_dev *m2m_dev;
-	struct video_device vfd;
 	struct device *dev;
 	int irq;
 	u32 caps;
-	int max_sessions;
-};
-
-struct harbor_media_ctx {
-	struct v4l2_fh fh;
-	struct harbor_media *hm;
-	int session;
+#ifdef HARBOR_MEDIA_V4L2
+	struct v4l2_device v4l2_dev;
+	struct v4l2_m2m_dev *m2m_dev;
+	struct video_device vfd;
+#else
+	struct miscdevice misc;
+#endif
 };
 
 static inline void __iomem *sess_reg(struct harbor_media *hm, int sess)
@@ -80,12 +68,33 @@ static inline void __iomem *sess_reg(struct harbor_media *hm, int sess)
 	       sess * HARBOR_MEDIA_SESS_STRIDE;
 }
 
+static irqreturn_t harbor_media_irq(int irq, void *data)
+{
+	struct harbor_media *hm = data;
+	u32 status;
+
+	status = readl(hm->base + HARBOR_MEDIA_INT_STATUS);
+	if (!status)
+		return IRQ_NONE;
+
+	writel(status, hm->base + HARBOR_MEDIA_INT_STATUS);
+	return IRQ_HANDLED;
+}
+
+#ifdef HARBOR_MEDIA_V4L2
+/* ---- V4L2 M2M path ---- */
+
+struct harbor_media_ctx {
+	struct v4l2_fh fh;
+	struct harbor_media *hm;
+	int session;
+};
+
 static void harbor_media_device_run(void *priv)
 {
 	struct harbor_media_ctx *ctx = priv;
 	struct harbor_media *hm = ctx->hm;
 
-	/* Start the hardware session */
 	writel(HARBOR_SESS_START | HARBOR_SESS_DECODE,
 	       sess_reg(hm, ctx->session) + HARBOR_MEDIA_SESS_CTRL);
 }
@@ -94,7 +103,7 @@ static const struct v4l2_m2m_ops harbor_media_m2m_ops = {
     .device_run = harbor_media_device_run,
 };
 
-static int harbor_media_open(struct file *file)
+static int harbor_media_v4l2_open(struct file *file)
 {
 	struct harbor_media *hm = video_drvdata(file);
 	struct harbor_media_ctx *ctx;
@@ -104,7 +113,7 @@ static int harbor_media_open(struct file *file)
 		return -ENOMEM;
 
 	ctx->hm = hm;
-	ctx->session = 0; /* simplified: single session */
+	ctx->session = 0;
 
 	v4l2_fh_init(&ctx->fh, &hm->vfd);
 	ctx->fh.m2m_ctx = v4l2_m2m_ctx_init(hm->m2m_dev, ctx, NULL);
@@ -119,7 +128,7 @@ static int harbor_media_open(struct file *file)
 	return 0;
 }
 
-static int harbor_media_release(struct file *file)
+static int harbor_media_v4l2_release(struct file *file)
 {
 	struct harbor_media_ctx *ctx =
 	    container_of(file->private_data, struct harbor_media_ctx, fh);
@@ -131,33 +140,91 @@ static int harbor_media_release(struct file *file)
 	return 0;
 }
 
-static const struct v4l2_file_operations harbor_media_fops = {
+static const struct v4l2_file_operations harbor_media_v4l2_fops = {
     .owner = THIS_MODULE,
-    .open = harbor_media_open,
-    .release = harbor_media_release,
+    .open = harbor_media_v4l2_open,
+    .release = harbor_media_v4l2_release,
     .poll = v4l2_m2m_fop_poll,
     .unlocked_ioctl = video_ioctl2,
     .mmap = v4l2_m2m_fop_mmap,
 };
 
-static const struct v4l2_ioctl_ops harbor_media_ioctl_ops = {
-    .vidioc_querycap = NULL, /* TODO */
+static const struct v4l2_ioctl_ops harbor_media_ioctl_ops = {};
+
+static int harbor_media_register_v4l2(struct harbor_media *hm)
+{
+	int ret;
+
+	ret = v4l2_device_register(hm->dev, &hm->v4l2_dev);
+	if (ret)
+		return ret;
+
+	hm->m2m_dev = v4l2_m2m_init(&harbor_media_m2m_ops);
+	if (IS_ERR(hm->m2m_dev)) {
+		ret = PTR_ERR(hm->m2m_dev);
+		v4l2_device_unregister(&hm->v4l2_dev);
+		return ret;
+	}
+
+	hm->vfd.fops = &harbor_media_v4l2_fops;
+	hm->vfd.ioctl_ops = &harbor_media_ioctl_ops;
+	hm->vfd.v4l2_dev = &hm->v4l2_dev;
+	hm->vfd.vfl_dir = VFL_DIR_M2M;
+	hm->vfd.device_caps = V4L2_CAP_VIDEO_M2M | V4L2_CAP_STREAMING;
+	snprintf(hm->vfd.name, sizeof(hm->vfd.name), "harbor-media");
+	video_set_drvdata(&hm->vfd, hm);
+
+	ret = video_register_device(&hm->vfd, VFL_TYPE_VIDEO, -1);
+	if (ret) {
+		v4l2_m2m_release(hm->m2m_dev);
+		v4l2_device_unregister(&hm->v4l2_dev);
+		return ret;
+	}
+
+	return 0;
+}
+
+static void harbor_media_unregister_v4l2(struct harbor_media *hm)
+{
+	video_unregister_device(&hm->vfd);
+	v4l2_m2m_release(hm->m2m_dev);
+	v4l2_device_unregister(&hm->v4l2_dev);
+}
+
+#else
+/* ---- Fallback miscdevice path ---- */
+
+static int harbor_media_misc_open(struct inode *inode, struct file *file)
+{
+	return 0;
+}
+
+static long harbor_media_misc_ioctl(struct file *file, unsigned int cmd,
+				    unsigned long arg)
+{
+	return -ENOTTY;
+}
+
+static const struct file_operations harbor_media_misc_fops = {
+    .owner = THIS_MODULE,
+    .open = harbor_media_misc_open,
+    .unlocked_ioctl = harbor_media_misc_ioctl,
 };
 
-static irqreturn_t harbor_media_irq(int irq, void *data)
+static int harbor_media_register_misc(struct harbor_media *hm)
 {
-	struct harbor_media *hm = data;
-	u32 status;
-
-	status = readl(hm->base + HARBOR_MEDIA_INT_STATUS);
-	if (!status)
-		return IRQ_NONE;
-
-	writel(status, hm->base + HARBOR_MEDIA_INT_STATUS);
-
-	/* Complete M2M jobs for finished sessions */
-	return IRQ_HANDLED;
+	hm->misc.minor = MISC_DYNAMIC_MINOR;
+	hm->misc.name = "harbor-media";
+	hm->misc.fops = &harbor_media_misc_fops;
+	hm->misc.parent = hm->dev;
+	return misc_register(&hm->misc);
 }
+
+static void harbor_media_unregister_misc(struct harbor_media *hm)
+{
+	misc_deregister(&hm->misc);
+}
+#endif /* HARBOR_MEDIA_V4L2 */
 
 static int harbor_media_probe(struct platform_device *pdev)
 {
@@ -175,59 +242,46 @@ static int harbor_media_probe(struct platform_device *pdev)
 		return PTR_ERR(hm->base);
 
 	hm->irq = platform_get_irq(pdev, 0);
-	if (hm->irq < 0)
-		return hm->irq;
+	if (hm->irq >= 0) {
+		ret = devm_request_irq(&pdev->dev, hm->irq, harbor_media_irq, 0,
+				       "harbor-media", hm);
+		if (ret)
+			return ret;
+	}
 
-	ret = devm_request_irq(&pdev->dev, hm->irq, harbor_media_irq, 0,
-			       "harbor-media", hm);
-	if (ret)
-		return ret;
-
-	/* Enable engine and read capabilities */
 	writel(1, hm->base + HARBOR_MEDIA_ENGINE_CTRL);
 	hm->caps = readl(hm->base + HARBOR_MEDIA_ENGINE_CAPS);
 	writel(0xFF, hm->base + HARBOR_MEDIA_INT_ENABLE);
 
-	ret = v4l2_device_register(&pdev->dev, &hm->v4l2_dev);
+#ifdef HARBOR_MEDIA_V4L2
+	ret = harbor_media_register_v4l2(hm);
+#else
+	ret = harbor_media_register_misc(hm);
+#endif
 	if (ret)
 		return ret;
 
-	hm->m2m_dev = v4l2_m2m_init(&harbor_media_m2m_ops);
-	if (IS_ERR(hm->m2m_dev)) {
-		ret = PTR_ERR(hm->m2m_dev);
-		goto err_v4l2;
-	}
+	dev_info(&pdev->dev, "Harbor Media Engine (caps=0x%08x%s)\n", hm->caps,
+#ifdef HARBOR_MEDIA_V4L2
+		 ", V4L2 M2M"
+#else
+		 ", miscdev"
+#endif
+	);
 
-	hm->vfd.fops = &harbor_media_fops;
-	hm->vfd.ioctl_ops = &harbor_media_ioctl_ops;
-	hm->vfd.v4l2_dev = &hm->v4l2_dev;
-	hm->vfd.vfl_dir = VFL_DIR_M2M;
-	hm->vfd.device_caps = V4L2_CAP_VIDEO_M2M | V4L2_CAP_STREAMING;
-	snprintf(hm->vfd.name, sizeof(hm->vfd.name), "harbor-media");
-	video_set_drvdata(&hm->vfd, hm);
-
-	ret = video_register_device(&hm->vfd, VFL_TYPE_VIDEO, -1);
-	if (ret)
-		goto err_m2m;
-
-	dev_info(&pdev->dev, "Harbor Media Engine (caps=0x%08x)\n", hm->caps);
 	platform_set_drvdata(pdev, hm);
 	return 0;
-
-err_m2m:
-	v4l2_m2m_release(hm->m2m_dev);
-err_v4l2:
-	v4l2_device_unregister(&hm->v4l2_dev);
-	return ret;
 }
 
 static void harbor_media_remove(struct platform_device *pdev)
 {
 	struct harbor_media *hm = platform_get_drvdata(pdev);
 
-	video_unregister_device(&hm->vfd);
-	v4l2_m2m_release(hm->m2m_dev);
-	v4l2_device_unregister(&hm->v4l2_dev);
+#ifdef HARBOR_MEDIA_V4L2
+	harbor_media_unregister_v4l2(hm);
+#else
+	harbor_media_unregister_misc(hm);
+#endif
 }
 
 static const struct of_device_id harbor_media_of_match[] = {
