@@ -71,7 +71,11 @@ class HarborBitStruct with HarborPrettyString {
   /// Field name → bit range mapping.
   final Map<String, HarborBitRange> fields;
 
-  const HarborBitStruct(this.fields);
+  /// Optional name for this struct, used to distinguish formats
+  /// that share the same field layout (e.g. U-type vs J-type).
+  final String? name;
+
+  const HarborBitStruct(this.fields, {this.name});
 
   /// Total width of the struct in bits (max end + 1).
   int get width {

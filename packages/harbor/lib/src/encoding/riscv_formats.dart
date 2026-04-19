@@ -15,7 +15,7 @@ const rType = HarborBitStruct({
   'rs1': HarborBitRange(15, 19),
   'rs2': HarborBitRange(20, 24),
   'funct7': HarborBitRange(25, 31),
-});
+}, name: 'RType');
 
 /// I-type: immediate operations, loads, JALR.
 ///
@@ -26,7 +26,7 @@ const iType = HarborBitStruct({
   'funct3': HarborBitRange(12, 14),
   'rs1': HarborBitRange(15, 19),
   'imm': HarborBitRange(20, 31),
-});
+}, name: 'IType');
 
 /// S-type: stores.
 ///
@@ -41,7 +41,7 @@ const sType = HarborBitStruct({
   'rs1': HarborBitRange(15, 19),
   'rs2': HarborBitRange(20, 24),
   'immHi': HarborBitRange(25, 31),
-});
+}, name: 'SType');
 
 /// Reconstructs the S-type immediate from its split fields.
 int sTypeImm(Map<String, int> fields) =>
@@ -59,7 +59,7 @@ const bType = HarborBitStruct({
   'rs1': HarborBitRange(15, 19),
   'rs2': HarborBitRange(20, 24),
   'immHi': HarborBitRange(25, 31), // [12|10:5]
-});
+}, name: 'BType');
 
 /// Reconstructs the B-type immediate from its split fields.
 ///
@@ -80,7 +80,7 @@ const uType = HarborBitStruct({
   'opcode': HarborBitRange(0, 6),
   'rd': HarborBitRange(7, 11),
   'imm': HarborBitRange(12, 31),
-});
+}, name: 'UType');
 
 /// J-type: jumps (JAL).
 ///
@@ -91,7 +91,7 @@ const jType = HarborBitStruct({
   'opcode': HarborBitRange(0, 6),
   'rd': HarborBitRange(7, 11),
   'imm': HarborBitRange(12, 31), // [20, 10:1, 11, 19:12]
-});
+}, name: 'JType');
 
 /// Reconstructs the J-type immediate from the raw 20-bit field.
 ///

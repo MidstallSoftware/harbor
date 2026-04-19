@@ -199,13 +199,11 @@ class HarborCryptoUnit extends BridgeModule {
     final brev8Bytes = <Logic>[];
     for (var b = 0; b < 8; b++) {
       final byte = rs1.getRange(b * 8, (b + 1) * 8);
-      // Reverse: bit7->bit0, bit6->bit1, ...
-      final reversed = <Logic>[
-        for (var i = 0; i < 8; i++) byte[7 - i],
-      ].swizzle();
+      // Reverse bits within the byte: bit0->bit7, bit1->bit6, ...
+      final reversed = <Logic>[for (var i = 0; i < 8; i++) byte[i]].swizzle();
       brev8Bytes.add(reversed);
     }
-    brev8Result <= brev8Bytes.swizzle();
+    brev8Result <= brev8Bytes.reversed.toList().swizzle();
 
     // === Zbkc: clmul - carry-less multiply (lower 64 bits) ===
     // clmul(a, b) = XOR of (a << i) for each bit i where b[i] is set

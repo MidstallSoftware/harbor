@@ -87,7 +87,7 @@
 
       devShells = forAllSystems (
         { pkgs, ... }:
-        {
+        lib.optionalAttrs (!pkgs.stdenv.hostPlatform.isRiscV) {
           default = pkgs.mkShell {
             name = "harbor-dev-shell";
             packages = with pkgs; [
@@ -103,7 +103,8 @@
         { system, pkgs, ... }:
         {
           formatting = treefmtEval.${system}.config.build.check self;
-
+        }
+        // lib.optionalAttrs (!pkgs.stdenv.hostPlatform.isRiscV) {
           default = pkgs.buildDartApplication {
             pname = "harbor-check";
             inherit (flakever) version;
