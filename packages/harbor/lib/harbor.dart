@@ -33,6 +33,7 @@ export 'src/cache/l1_cache.dart';
 export 'src/cache/l2_cache.dart';
 
 // Memory
+export 'src/memory/data_port.dart';
 export 'src/memory/memory_map.dart';
 export 'src/memory/memory_port.dart';
 export 'src/memory/mmu_config.dart';
@@ -81,6 +82,7 @@ export 'src/riscv/extensions/rv_d.dart';
 export 'src/riscv/extensions/rv_f.dart';
 export 'src/riscv/extensions/rv_h.dart';
 export 'src/riscv/extensions/rv_m.dart';
+export 'src/riscv/extensions/rv_priv.dart';
 export 'src/riscv/extensions/rv_misc.dart';
 export 'src/riscv/extensions/rv_zfhmin.dart';
 export 'src/riscv/extensions/rv_zicond.dart';

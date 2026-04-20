@@ -1,0 +1,70 @@
+import 'package:harbor/harbor.dart';
+import 'package:test/test.dart';
+
+void main() {
+  group('rvPriv extension', () {
+    test('has correct name', () {
+      expect(rvPriv.name, equals('Priv'));
+    });
+
+    test('has no misa key or bit', () {
+      expect(rvPriv.key, isNull);
+      expect(rvPriv.misaBit, isNull);
+    });
+
+    test('has 3 operations', () {
+      expect(rvPriv.operations, hasLength(3));
+    });
+
+    test('sret uses system opcode with funct7 0x08', () {
+      final sret = rvPriv.operations.firstWhere((op) => op.mnemonic == 'sret');
+      expect(sret.opcode, equals(RiscvOpcode.system));
+      expect(sret.funct7, equals(0x08));
+      expect(sret.privilegeLevel, equals(1));
+    });
+
+    test('sret microcode is a single RiscVReturnOp with level 1', () {
+      final sret = rvPriv.operations.firstWhere((op) => op.mnemonic == 'sret');
+      expect(sret.microcode, hasLength(1));
+      expect(sret.microcode.first, isA<RiscVReturnOp>());
+      expect((sret.microcode.first as RiscVReturnOp).privilegeLevel, equals(1));
+    });
+
+    test('mret uses system opcode with funct7 0x18', () {
+      final mret = rvPriv.operations.firstWhere((op) => op.mnemonic == 'mret');
+      expect(mret.opcode, equals(RiscvOpcode.system));
+      expect(mret.funct7, equals(0x18));
+      expect(mret.privilegeLevel, equals(3));
+    });
+
+    test('mret microcode is a single RiscVReturnOp with level 3', () {
+      final mret = rvPriv.operations.firstWhere((op) => op.mnemonic == 'mret');
+      expect(mret.microcode, hasLength(1));
+      expect(mret.microcode.first, isA<RiscVReturnOp>());
+      expect((mret.microcode.first as RiscVReturnOp).privilegeLevel, equals(3));
+    });
+
+    test('wfi uses system opcode with funct7 0x08 and funct3 0', () {
+      final wfi = rvPriv.operations.firstWhere((op) => op.mnemonic == 'wfi');
+      expect(wfi.opcode, equals(RiscvOpcode.system));
+      expect(wfi.funct7, equals(0x08));
+      expect(wfi.funct3, equals(0));
+    });
+
+    test('wfi microcode is a single RiscVWaitForInterrupt', () {
+      final wfi = rvPriv.operations.firstWhere((op) => op.mnemonic == 'wfi');
+      expect(wfi.microcode, hasLength(1));
+      expect(wfi.microcode.first, isA<RiscVWaitForInterrupt>());
+    });
+
+    test('all operations use rType format', () {
+      for (final op in rvPriv.operations) {
+        expect(
+          op.format,
+          equals(rType),
+          reason: '${op.mnemonic} should be rType',
+        );
+      }
+    });
+  });
+}

@@ -292,6 +292,21 @@ class RiscVHypervisorFenceOp extends RiscVMicroOp {
   const RiscVHypervisorFenceOp({this.isGstage = false});
 }
 
+/// Copy the value of one field latch to another.
+class RiscVCopyField extends RiscVMicroOp {
+  final RiscVMicroOpField src;
+  final RiscVMicroOpField dest;
+
+  const RiscVCopyField(this.src, this.dest);
+}
+
+class RiscVSetField extends RiscVMicroOp {
+  final RiscVMicroOpSource src;
+  final RiscVMicroOpField dest;
+
+  const RiscVSetField(this.src, this.dest);
+}
+
 /// Hypervisor load/store virtual (HLV/HSV).
 class RiscVHypervisorMemOp extends RiscVMicroOp {
   final RiscVMicroOpField base;
