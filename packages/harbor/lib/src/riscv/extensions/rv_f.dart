@@ -30,6 +30,7 @@ const rvF = RiscVExtension(
           RiscVMicroOpField.rd,
           RiscVMemSize.word,
         ),
+        RiscVWriteRegister(RiscVMicroOpField.rd, RiscVMicroOpSource.rd),
         RiscVUpdatePc(RiscVMicroOpField.pc, offset: 4),
       ],
     ),
