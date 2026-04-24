@@ -5,17 +5,14 @@ import '../operation.dart';
 import '../resource.dart';
 
 const _fp64 = RiscVFloatRegFile(64);
+const _fp32 = RiscVFloatRegFile(32);
 const _int = RiscVIntRegFile(32);
 
-/// D extension - Double-precision floating-point.
-///
-/// Requires F extension. Operations use f0-f31 with 64-bit width.
 const rvD = RiscVExtension(
   name: 'D',
   key: 'D',
   misaBit: 3,
   operations: [
-    // Load/Store
     RiscVOperation(
       mnemonic: 'fld',
       opcode: 0x07,
@@ -59,7 +56,6 @@ const rvD = RiscVExtension(
         RiscVUpdatePc(RiscVMicroOpField.pc, offset: 4),
       ],
     ),
-    // Arithmetic
     RiscVOperation(
       mnemonic: 'fadd.d',
       opcode: 0x53,
@@ -71,7 +67,19 @@ const rvD = RiscVExtension(
         RfResource(_fp64, rd),
         FpuResource(),
       ],
-      microcode: [RiscVUpdatePc(RiscVMicroOpField.pc, offset: 4)],
+      microcode: [
+        RiscVReadRegister(RiscVMicroOpField.rs1),
+        RiscVReadRegister(RiscVMicroOpField.rs2),
+        RiscVFpuOp(
+          RiscVFpuFunct.fadd,
+          RiscVMicroOpField.rs1,
+          RiscVMicroOpField.rd,
+          b: RiscVMicroOpField.rs2,
+          doublePrecision: true,
+        ),
+        RiscVWriteRegister(RiscVMicroOpField.rd, RiscVMicroOpSource.rd),
+        RiscVUpdatePc(RiscVMicroOpField.pc, offset: 4),
+      ],
     ),
     RiscVOperation(
       mnemonic: 'fsub.d',
@@ -84,7 +92,19 @@ const rvD = RiscVExtension(
         RfResource(_fp64, rd),
         FpuResource(),
       ],
-      microcode: [RiscVUpdatePc(RiscVMicroOpField.pc, offset: 4)],
+      microcode: [
+        RiscVReadRegister(RiscVMicroOpField.rs1),
+        RiscVReadRegister(RiscVMicroOpField.rs2),
+        RiscVFpuOp(
+          RiscVFpuFunct.fsub,
+          RiscVMicroOpField.rs1,
+          RiscVMicroOpField.rd,
+          b: RiscVMicroOpField.rs2,
+          doublePrecision: true,
+        ),
+        RiscVWriteRegister(RiscVMicroOpField.rd, RiscVMicroOpSource.rd),
+        RiscVUpdatePc(RiscVMicroOpField.pc, offset: 4),
+      ],
     ),
     RiscVOperation(
       mnemonic: 'fmul.d',
@@ -97,7 +117,19 @@ const rvD = RiscVExtension(
         RfResource(_fp64, rd),
         FpuResource(),
       ],
-      microcode: [RiscVUpdatePc(RiscVMicroOpField.pc, offset: 4)],
+      microcode: [
+        RiscVReadRegister(RiscVMicroOpField.rs1),
+        RiscVReadRegister(RiscVMicroOpField.rs2),
+        RiscVFpuOp(
+          RiscVFpuFunct.fmul,
+          RiscVMicroOpField.rs1,
+          RiscVMicroOpField.rd,
+          b: RiscVMicroOpField.rs2,
+          doublePrecision: true,
+        ),
+        RiscVWriteRegister(RiscVMicroOpField.rd, RiscVMicroOpSource.rd),
+        RiscVUpdatePc(RiscVMicroOpField.pc, offset: 4),
+      ],
     ),
     RiscVOperation(
       mnemonic: 'fdiv.d',
@@ -111,7 +143,19 @@ const rvD = RiscVExtension(
         FpuResource(),
       ],
       executionMode: RiscVExecutionMode.microcoded,
-      microcode: [RiscVUpdatePc(RiscVMicroOpField.pc, offset: 4)],
+      microcode: [
+        RiscVReadRegister(RiscVMicroOpField.rs1),
+        RiscVReadRegister(RiscVMicroOpField.rs2),
+        RiscVFpuOp(
+          RiscVFpuFunct.fdiv,
+          RiscVMicroOpField.rs1,
+          RiscVMicroOpField.rd,
+          b: RiscVMicroOpField.rs2,
+          doublePrecision: true,
+        ),
+        RiscVWriteRegister(RiscVMicroOpField.rd, RiscVMicroOpSource.rd),
+        RiscVUpdatePc(RiscVMicroOpField.pc, offset: 4),
+      ],
     ),
     RiscVOperation(
       mnemonic: 'fsqrt.d',
@@ -120,26 +164,88 @@ const rvD = RiscVExtension(
       format: rType,
       resources: [RfResource(_fp64, rs1), RfResource(_fp64, rd), FpuResource()],
       executionMode: RiscVExecutionMode.microcoded,
-      microcode: [RiscVUpdatePc(RiscVMicroOpField.pc, offset: 4)],
+      microcode: [
+        RiscVReadRegister(RiscVMicroOpField.rs1),
+        RiscVFpuOp(
+          RiscVFpuFunct.fsqrt,
+          RiscVMicroOpField.rs1,
+          RiscVMicroOpField.rd,
+          doublePrecision: true,
+        ),
+        RiscVWriteRegister(RiscVMicroOpField.rd, RiscVMicroOpSource.rd),
+        RiscVUpdatePc(RiscVMicroOpField.pc, offset: 4),
+      ],
     ),
-    // Conversion single↔double
     RiscVOperation(
       mnemonic: 'fcvt.s.d',
       opcode: 0x53,
       funct7: 0x20,
       format: rType,
-      resources: [RfResource(_fp64, rs1), RfResource(_fp64, rd), FpuResource()],
-      microcode: [RiscVUpdatePc(RiscVMicroOpField.pc, offset: 4)],
+      resources: [RfResource(_fp64, rs1), RfResource(_fp32, rd), FpuResource()],
+      microcode: [
+        RiscVReadRegister(RiscVMicroOpField.rs1),
+        RiscVFpuOp(
+          RiscVFpuFunct.fcvtSD,
+          RiscVMicroOpField.rs1,
+          RiscVMicroOpField.rd,
+          doublePrecision: true,
+        ),
+        RiscVWriteRegister(RiscVMicroOpField.rd, RiscVMicroOpSource.rd),
+        RiscVUpdatePc(RiscVMicroOpField.pc, offset: 4),
+      ],
     ),
     RiscVOperation(
       mnemonic: 'fcvt.d.s',
       opcode: 0x53,
       funct7: 0x21,
       format: rType,
-      resources: [RfResource(_fp64, rs1), RfResource(_fp64, rd), FpuResource()],
-      microcode: [RiscVUpdatePc(RiscVMicroOpField.pc, offset: 4)],
+      resources: [RfResource(_fp32, rs1), RfResource(_fp64, rd), FpuResource()],
+      microcode: [
+        RiscVReadRegister(RiscVMicroOpField.rs1),
+        RiscVFpuOp(
+          RiscVFpuFunct.fcvtDS,
+          RiscVMicroOpField.rs1,
+          RiscVMicroOpField.rd,
+        ),
+        RiscVWriteRegister(RiscVMicroOpField.rd, RiscVMicroOpSource.rd),
+        RiscVUpdatePc(RiscVMicroOpField.pc, offset: 4),
+      ],
     ),
-    // Compare
+    RiscVOperation(
+      mnemonic: 'fcvt.w.d',
+      opcode: 0x53,
+      funct7: 0x61,
+      format: rType,
+      resources: [RfResource(_fp64, rs1), RfResource(_int, rd), FpuResource()],
+      microcode: [
+        RiscVReadRegister(RiscVMicroOpField.rs1),
+        RiscVFpuOp(
+          RiscVFpuFunct.fcvtWD,
+          RiscVMicroOpField.rs1,
+          RiscVMicroOpField.rd,
+          doublePrecision: true,
+        ),
+        RiscVWriteRegister(RiscVMicroOpField.rd, RiscVMicroOpSource.rd),
+        RiscVUpdatePc(RiscVMicroOpField.pc, offset: 4),
+      ],
+    ),
+    RiscVOperation(
+      mnemonic: 'fcvt.d.w',
+      opcode: 0x53,
+      funct7: 0x69,
+      format: rType,
+      resources: [RfResource(_int, rs1), RfResource(_fp64, rd), FpuResource()],
+      microcode: [
+        RiscVReadRegister(RiscVMicroOpField.rs1),
+        RiscVFpuOp(
+          RiscVFpuFunct.fcvtDW,
+          RiscVMicroOpField.rs1,
+          RiscVMicroOpField.rd,
+        ),
+        RiscVWriteRegister(RiscVMicroOpField.rd, RiscVMicroOpSource.rd),
+        RiscVUpdatePc(RiscVMicroOpField.pc, offset: 4),
+      ],
+    ),
     RiscVOperation(
       mnemonic: 'feq.d',
       opcode: 0x53,
@@ -152,7 +258,19 @@ const rvD = RiscVExtension(
         RfResource(_int, rd),
         FpuResource(),
       ],
-      microcode: [RiscVUpdatePc(RiscVMicroOpField.pc, offset: 4)],
+      microcode: [
+        RiscVReadRegister(RiscVMicroOpField.rs1),
+        RiscVReadRegister(RiscVMicroOpField.rs2),
+        RiscVFpuOp(
+          RiscVFpuFunct.feq,
+          RiscVMicroOpField.rs1,
+          RiscVMicroOpField.rd,
+          b: RiscVMicroOpField.rs2,
+          doublePrecision: true,
+        ),
+        RiscVWriteRegister(RiscVMicroOpField.rd, RiscVMicroOpSource.rd),
+        RiscVUpdatePc(RiscVMicroOpField.pc, offset: 4),
+      ],
     ),
     RiscVOperation(
       mnemonic: 'flt.d',
@@ -166,7 +284,19 @@ const rvD = RiscVExtension(
         RfResource(_int, rd),
         FpuResource(),
       ],
-      microcode: [RiscVUpdatePc(RiscVMicroOpField.pc, offset: 4)],
+      microcode: [
+        RiscVReadRegister(RiscVMicroOpField.rs1),
+        RiscVReadRegister(RiscVMicroOpField.rs2),
+        RiscVFpuOp(
+          RiscVFpuFunct.flt,
+          RiscVMicroOpField.rs1,
+          RiscVMicroOpField.rd,
+          b: RiscVMicroOpField.rs2,
+          doublePrecision: true,
+        ),
+        RiscVWriteRegister(RiscVMicroOpField.rd, RiscVMicroOpSource.rd),
+        RiscVUpdatePc(RiscVMicroOpField.pc, offset: 4),
+      ],
     ),
     RiscVOperation(
       mnemonic: 'fle.d',
@@ -180,7 +310,19 @@ const rvD = RiscVExtension(
         RfResource(_int, rd),
         FpuResource(),
       ],
-      microcode: [RiscVUpdatePc(RiscVMicroOpField.pc, offset: 4)],
+      microcode: [
+        RiscVReadRegister(RiscVMicroOpField.rs1),
+        RiscVReadRegister(RiscVMicroOpField.rs2),
+        RiscVFpuOp(
+          RiscVFpuFunct.fle,
+          RiscVMicroOpField.rs1,
+          RiscVMicroOpField.rd,
+          b: RiscVMicroOpField.rs2,
+          doublePrecision: true,
+        ),
+        RiscVWriteRegister(RiscVMicroOpField.rd, RiscVMicroOpSource.rd),
+        RiscVUpdatePc(RiscVMicroOpField.pc, offset: 4),
+      ],
     ),
   ],
 );

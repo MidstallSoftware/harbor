@@ -307,6 +307,50 @@ class RiscVSetField extends RiscVMicroOp {
   const RiscVSetField(this.src, this.dest);
 }
 
+enum RiscVFpuFunct {
+  fadd,
+  fsub,
+  fmul,
+  fdiv,
+  fsqrt,
+  fcvtWS,
+  fcvtSW,
+  fcvtLS,
+  fcvtSL,
+  fcvtWD,
+  fcvtDW,
+  fcvtLD,
+  fcvtDL,
+  fcvtSD,
+  fcvtDS,
+  feq,
+  flt,
+  fle,
+  fmv,
+  fclass,
+  fsgnj,
+  fsgnjn,
+  fsgnjx,
+  fmin,
+  fmax,
+}
+
+class RiscVFpuOp extends RiscVMicroOp {
+  final RiscVFpuFunct funct;
+  final RiscVMicroOpField a;
+  final RiscVMicroOpField? b;
+  final RiscVMicroOpField dest;
+  final bool doublePrecision;
+
+  const RiscVFpuOp(
+    this.funct,
+    this.a,
+    this.dest, {
+    this.b,
+    this.doublePrecision = false,
+  });
+}
+
 /// Hypervisor load/store virtual (HLV/HSV).
 class RiscVHypervisorMemOp extends RiscVMicroOp {
   final RiscVMicroOpField base;
