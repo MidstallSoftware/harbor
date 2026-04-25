@@ -43,7 +43,7 @@ class Gf180mcuProvider extends PdkProvider {
   StandardCellLibrary get standardCellLibrary => StandardCellLibrary(
     name: _libName,
     libertyPath:
-        '$pdkRoot/libs.ref/$_libName/liberty/${_libName}__tt_025C_3v30.lib',
+        '$pdkRoot/libs.ref/$_libName/lib/${_libName}__tt_025C_3v30.lib',
     lefPath: '$pdkRoot/libs.ref/$_libName/lef/$_libName.lef',
     techLefPath: '$pdkRoot/libs.ref/$_libName/techlef/${_libName}__nom.tlef',
     verilogPath: '$pdkRoot/libs.ref/$_libName/verilog/$_libName.v',
