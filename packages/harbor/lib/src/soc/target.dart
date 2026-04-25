@@ -467,12 +467,12 @@ class HarborAsicTarget extends HarborDeviceTarget {
       buf.writeln();
     }
 
-    buf.writeln('hierarchy -top $topCell');
-    buf.writeln('synth -top $topCell -flatten');
+    buf.writeln('hierarchy -top $topCell -keep_portwidths');
+    buf.writeln('synth -top $topCell');
     buf.writeln('dfflibmap -liberty ${lib.libertyPath}');
     buf.writeln('abc -liberty ${lib.libertyPath}');
     buf.writeln(
-      'yosys hilomap -hicell ${lib.tieHighCell} Z '
+      'hilomap -hicell ${lib.tieHighCell} Z '
       '-locell ${lib.tieLowCell} ZN',
     );
     buf.writeln('opt_clean -purge');
@@ -498,7 +498,7 @@ class HarborAsicTarget extends HarborDeviceTarget {
     buf.writeln('dfflibmap -liberty ${lib.libertyPath}');
     buf.writeln('abc -liberty ${lib.libertyPath}');
     buf.writeln(
-      'yosys hilomap -hicell ${lib.tieHighCell} Z '
+      'hilomap -hicell ${lib.tieHighCell} Z '
       '-locell ${lib.tieLowCell} ZN',
     );
     buf.writeln('opt_clean -purge');
