@@ -51,6 +51,8 @@ class HarborMaskRom extends BridgeModule with HarborDeviceTreeNodeProvider {
     required this.baseAddress,
     required this.initialData,
     this.dataWidth = 32,
+    int? busAddressWidth,
+    int? busDataWidth,
     BusProtocol protocol = BusProtocol.wishbone,
     String? name,
   }) : super('HarborMaskRom', name: name ?? 'maskrom') {
@@ -64,13 +66,14 @@ class HarborMaskRom extends BridgeModule with HarborDeviceTreeNodeProvider {
       module: this,
       name: 'bus',
       protocol: protocol,
-      addressWidth: addrWidth,
-      dataWidth: dataWidth,
+      addressWidth: busAddressWidth ?? addrWidth,
+      dataWidth: busDataWidth ?? dataWidth,
     );
 
     final clk = input('clk');
-    final addr = bus.addr;
-    final datOut = bus.dataOut;
+    final addr = bus.addr.getRange(0, addrWidth);
+    final datOutInternal = Logic(name: 'rom_data', width: dataWidth);
+    bus.dataOut <= datOutInternal.zeroExtend(bus.dataOut.width);
     final ack = bus.ack;
     final stb = bus.stb;
 
@@ -78,7 +81,7 @@ class HarborMaskRom extends BridgeModule with HarborDeviceTreeNodeProvider {
     // that synthesizes as LUT ROM on FPGAs
     Sequential(clk, [
       ack < Const(0),
-      datOut < Const(0, width: dataWidth),
+      datOutInternal < Const(0, width: dataWidth),
       If(
         stb & ~ack,
         then: [
@@ -86,7 +89,7 @@ class HarborMaskRom extends BridgeModule with HarborDeviceTreeNodeProvider {
           Case(addr, [
             for (var i = 0; i < initialData.length; i++)
               CaseItem(Const(i, width: addrWidth), [
-                datOut < Const(initialData[i], width: dataWidth),
+                datOutInternal < Const(initialData[i], width: dataWidth),
               ]),
           ]),
         ],

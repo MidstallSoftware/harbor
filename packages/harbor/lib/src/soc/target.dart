@@ -136,32 +136,47 @@ class HarborFpgaTarget extends HarborDeviceTarget {
   ///
   /// Produces a JSON netlist for nextpnr (iCE40/ECP5) or a
   /// Verilog netlist for Vivado/openXC7.
-  String generateYosysTcl(String topCell) {
+  String generateYosysTcl(String topCell, {List<String> svFiles = const []}) {
     final buf = StringBuffer();
     buf.writeln('# Auto-generated Yosys synthesis for $name');
     buf.writeln('# Target: ${_yosysSynthTarget} ($device)');
     buf.writeln();
-    buf.writeln('yosys read_verilog -sv \$SV_FILE');
-    buf.writeln('yosys hierarchy -top $topCell');
+    if (svFiles.isNotEmpty) {
+      for (final sv in svFiles) {
+        buf.writeln('read_verilog -sv $sv');
+      }
+    } else {
+      buf.writeln('read_verilog -sv rtl/*.sv');
+    }
+    buf.writeln('hierarchy -top $topCell');
 
     switch (vendor) {
       case HarborFpgaVendor.ice40:
-        buf.writeln('yosys synth_ice40 -top $topCell -json $topCell.json');
+        buf.writeln('synth_ice40 -top $topCell -json $topCell.json');
       case HarborFpgaVendor.ecp5:
-        buf.writeln('yosys synth_ecp5 -top $topCell -json $topCell.json');
+        buf.writeln('synth_ecp5 -top $topCell -json $topCell.json');
       case HarborFpgaVendor.vivado:
       case HarborFpgaVendor.openXc7:
-        buf.writeln('yosys synth_xilinx -top $topCell -flatten');
-        buf.writeln('yosys write_json $topCell.json');
+        buf.writeln('synth_xilinx -top $topCell -flatten');
+        buf.writeln('write_json $topCell.json');
     }
 
-    buf.writeln('yosys stat');
+    buf.writeln('stat');
     return buf.toString();
   }
 
   /// Generates a nextpnr command for place-and-route (iCE40/ECP5).
   ///
   /// Returns null for Vivado targets (which use their own flow).
+  static String _ecp5DeviceSize(String device) {
+    final lower = device.toLowerCase();
+    if (lower.contains('12')) return '12k';
+    if (lower.contains('25')) return '25k';
+    if (lower.contains('45')) return '45k';
+    if (lower.contains('85')) return '85k';
+    return device;
+  }
+
   String? generateNextpnrCommand(String topCell) {
     switch (vendor) {
       case HarborFpgaVendor.ice40:
@@ -171,7 +186,8 @@ class HarborFpgaTarget extends HarborDeviceTarget {
             '--asc $topCell.asc'
             '${frequency > 0 ? " --freq ${(frequency / 1e6).toStringAsFixed(0)}" : ""}';
       case HarborFpgaVendor.ecp5:
-        return 'nextpnr-ecp5 --$device --package $package '
+        final ecp5Size = _ecp5DeviceSize(device);
+        return 'nextpnr-ecp5 --$ecp5Size --package $package '
             '--json $topCell.json '
             '--lpf $topCell.lpf '
             '--textcfg $topCell.config'
@@ -205,7 +221,7 @@ class HarborFpgaTarget extends HarborDeviceTarget {
     buf.writeln('DEVICE = $device');
     buf.writeln('PACKAGE = $package');
     buf.writeln();
-    buf.writeln('SV_FILE = rtl/\$(TOP).sv');
+    buf.writeln('SV_FILES = \$(wildcard rtl/*.sv)');
     buf.writeln();
 
     // Synthesis
@@ -214,7 +230,7 @@ class HarborFpgaTarget extends HarborDeviceTarget {
     buf.writeln('all: \$(TOP).$bitstreamExtension');
     buf.writeln();
     buf.writeln('synth: \$(TOP).json');
-    buf.writeln('\$(TOP).json: \$(SV_FILE)');
+    buf.writeln('\$(TOP).json: \$(SV_FILES)');
     buf.writeln('\tyosys -s synth.tcl');
     buf.writeln();
 
@@ -435,30 +451,30 @@ class HarborAsicTarget extends HarborDeviceTarget {
       buf.writeln('# Mode: hierarchical (${macros.length} macros)');
     }
     buf.writeln();
-    buf.writeln('yosys read_verilog -sv \$SV_FILE');
+    buf.writeln('read_verilog -sv rtl/*.sv');
 
     // In hierarchical mode, replace macros with blackbox stubs
     if (isHierarchical) {
       buf.writeln();
       buf.writeln('# Replace hardened macros with blackbox stubs');
-      buf.writeln('yosys read_verilog \$STUBS_V');
+      buf.writeln('read_verilog \$STUBS_V');
       for (final macro in macros) {
-        buf.writeln('yosys blackbox ${macro.moduleName}');
+        buf.writeln('blackbox ${macro.moduleName}');
       }
       buf.writeln();
     }
 
-    buf.writeln('yosys hierarchy -top $topCell');
-    buf.writeln('yosys synth -top $topCell -flatten');
-    buf.writeln('yosys dfflibmap -liberty ${lib.libertyPath}');
-    buf.writeln('yosys abc -liberty ${lib.libertyPath}');
+    buf.writeln('hierarchy -top $topCell');
+    buf.writeln('synth -top $topCell -flatten');
+    buf.writeln('dfflibmap -liberty ${lib.libertyPath}');
+    buf.writeln('abc -liberty ${lib.libertyPath}');
     buf.writeln(
       'yosys hilomap -hicell ${lib.tieHighCell} Z '
       '-locell ${lib.tieLowCell} ZN',
     );
-    buf.writeln('yosys opt_clean -purge');
-    buf.writeln('yosys write_verilog -noattr ${topCell}_synth.v');
-    buf.writeln('yosys stat -liberty ${lib.libertyPath}');
+    buf.writeln('opt_clean -purge');
+    buf.writeln('write_verilog -noattr ${topCell}_synth.v');
+    buf.writeln('stat -liberty ${lib.libertyPath}');
     return buf.toString();
   }
 
@@ -473,18 +489,18 @@ class HarborAsicTarget extends HarborDeviceTarget {
     );
     buf.writeln('# PDK: ${provider.name}');
     buf.writeln();
-    buf.writeln('yosys read_verilog -sv \$SV_FILE');
-    buf.writeln('yosys hierarchy -top ${macro.moduleName}');
-    buf.writeln('yosys synth -top ${macro.moduleName} -flatten');
-    buf.writeln('yosys dfflibmap -liberty ${lib.libertyPath}');
-    buf.writeln('yosys abc -liberty ${lib.libertyPath}');
+    buf.writeln('read_verilog -sv rtl/*.sv');
+    buf.writeln('hierarchy -top ${macro.moduleName}');
+    buf.writeln('synth -top ${macro.moduleName} -flatten');
+    buf.writeln('dfflibmap -liberty ${lib.libertyPath}');
+    buf.writeln('abc -liberty ${lib.libertyPath}');
     buf.writeln(
       'yosys hilomap -hicell ${lib.tieHighCell} Z '
       '-locell ${lib.tieLowCell} ZN',
     );
-    buf.writeln('yosys opt_clean -purge');
-    buf.writeln('yosys write_verilog -noattr ${macro.moduleName}_synth.v');
-    buf.writeln('yosys stat -liberty ${lib.libertyPath}');
+    buf.writeln('opt_clean -purge');
+    buf.writeln('write_verilog -noattr ${macro.moduleName}_synth.v');
+    buf.writeln('stat -liberty ${lib.libertyPath}');
     return buf.toString();
   }
 

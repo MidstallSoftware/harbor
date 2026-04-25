@@ -58,6 +58,20 @@ abstract class PdkProvider {
   /// Whether this PDK provides an on-die temperature sensor.
   bool get hasTemperatureSensor => false;
 
+  /// Returns an SRAM macro descriptor for the given configuration.
+  ///
+  /// [words] is the number of entries, [width] is the data width in bits,
+  /// [numPorts] is 1 (single-port) or 2 (dual-port).
+  /// Returns `null` if the PDK does not provide SRAM macros.
+  AnalogBlock? sramMacro({
+    required int words,
+    required int width,
+    int numPorts = 1,
+  }) => null;
+
+  /// Whether this PDK provides SRAM macros.
+  bool get hasSramMacro => false;
+
   /// Number of metal layers available for routing.
   int get metalLayers;
 

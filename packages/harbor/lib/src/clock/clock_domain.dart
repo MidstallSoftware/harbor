@@ -331,12 +331,12 @@ class HarborClockGenerator {
       ),
     );
 
-    pll.port('REFERENCECLK').port <= inputClk;
-    pll.port('RESETB').port <= Const(1);
-    pll.port('BYPASS').port <= Const(0);
+    pll.input('REFERENCECLK') <= inputClk;
+    pll.input('RESETB') <= Const(1);
+    pll.input('BYPASS') <= Const(0);
 
-    final pllClk = pll.port('PLLOUTGLOBAL').port;
-    final pllLock = pll.port('LOCK').port;
+    final pllClk = pll.output('PLLOUTGLOBAL');
+    final pllLock = pll.output('LOCK');
 
     // Reset is active until PLL locks
     final domain = HarborClockDomain(
@@ -355,24 +355,25 @@ class HarborClockGenerator {
     final clkiDiv = 1;
     final clkopDiv = (800000000 ~/ config.frequency).clamp(1, 128);
 
-    final pll = parent.addSubModule(
-      Ecp5Ehxplll(
-        clkiDiv: clkiDiv,
-        clkfbDiv: clkfbDiv,
-        clkopDiv: clkopDiv,
-        name: '${config.name}_pll',
-      ),
+    // Self-feedback: CLKFB driven by CLKOP
+    final feedback = Logic(name: '${config.name}_pll_fb');
+
+    final pll = Ecp5Ehxplll(
+      clkiDiv: clkiDiv,
+      clkfbDiv: clkfbDiv,
+      clkopDiv: clkopDiv,
+      clk: inputClk,
+      clkfb: feedback,
+      name: '${config.name}_pll',
     );
 
-    pll.port('CLKI').port <= inputClk;
-    pll.port('CLKFB').port <= pll.port('CLKOP').port;
-    pll.port('RST').port <= Const(0);
+    feedback <= pll.output('CLKOP');
 
     final domain = HarborClockDomain(
       config: config,
-      clk: pll.port('CLKOP').port,
-      reset: inputReset | ~pll.port('LOCK').port,
-      locked: pll.port('LOCK').port,
+      clk: pll.output('CLKOP'),
+      reset: inputReset | ~pll.output('LOCK'),
+      locked: pll.output('LOCK'),
     );
     _domains.add(domain);
     return domain;
@@ -396,22 +397,21 @@ class HarborClockGenerator {
       ),
     );
 
-    mmcm.port('CLKIN1').port <= inputClk;
-    mmcm.port('CLKIN2').port <= Const(0);
-    mmcm.port('CLKINSEL').port <= Const(1);
-    mmcm.port('CLKFBIN').port <= mmcm.port('CLKFBOUT').port;
-    mmcm.port('RST').port <= Const(0);
-    mmcm.port('PWRDWN').port <= Const(0);
+    mmcm.input('CLKIN1') <= inputClk;
+    mmcm.input('CLKIN2') <= Const(0);
+    mmcm.input('CLKINSEL') <= Const(1);
+    mmcm.input('CLKFBIN') <= mmcm.output('CLKFBOUT');
+    mmcm.input('RST') <= Const(0);
+    mmcm.input('PWRDWN') <= Const(0);
 
-    // Buffer the output clock
     final bufg = parent.addSubModule(XilinxBufg(name: '${config.name}_bufg'));
-    bufg.port('I').port <= mmcm.port('CLKOUT0').port;
+    bufg.input('I') <= mmcm.output('CLKOUT0');
 
     final domain = HarborClockDomain(
       config: config,
-      clk: bufg.port('O').port,
-      reset: inputReset | ~mmcm.port('LOCKED').port,
-      locked: mmcm.port('LOCKED').port,
+      clk: bufg.output('O'),
+      reset: inputReset | ~mmcm.output('LOCKED'),
+      locked: mmcm.output('LOCKED'),
     );
     _domains.add(domain);
     return domain;

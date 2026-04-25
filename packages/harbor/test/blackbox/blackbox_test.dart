@@ -1,4 +1,5 @@
 import 'package:harbor/harbor.dart';
+import 'package:rohd/rohd.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -36,7 +37,13 @@ void main() {
 
   group('ECP5 blackbox', () {
     test('EHXPLLL creates correctly', () {
-      final pll = Ecp5Ehxplll(clkiDiv: 1, clkfbDiv: 4, clkopDiv: 12);
+      final pll = Ecp5Ehxplll(
+        clkiDiv: 1,
+        clkfbDiv: 4,
+        clkopDiv: 12,
+        clk: Logic(),
+        clkfb: Logic(),
+      );
       expect(pll.definitionName, equals('EHXPLLL'));
     });
 
@@ -46,7 +53,22 @@ void main() {
     });
 
     test('DP16KD creates correctly', () {
-      final bram = Ecp5Dp16kd();
+      final bram = Ecp5Dp16kd(
+        clkA: Logic(),
+        ceA: Logic(),
+        weA: Logic(),
+        oceA: Logic(),
+        rstA: Logic(),
+        adA: Logic(width: 14),
+        diA: Logic(width: 18),
+        clkB: Logic(),
+        ceB: Logic(),
+        weB: Logic(),
+        oceB: Logic(),
+        rstB: Logic(),
+        adB: Logic(width: 14),
+        diB: Logic(width: 18),
+      );
       expect(bram.definitionName, equals('DP16KD'));
     });
 

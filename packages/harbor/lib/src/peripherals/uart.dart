@@ -36,6 +36,8 @@ class HarborUart extends BridgeModule with HarborDeviceTreeNodeProvider {
   HarborUart({
     required this.baseAddress,
     this.clockFrequency = 0,
+    int? busAddressWidth,
+    int? busDataWidth,
     BusProtocol protocol = BusProtocol.wishbone,
     String? name,
   }) : super('HarborUart', name: name ?? 'uart') {
@@ -49,15 +51,17 @@ class HarborUart extends BridgeModule with HarborDeviceTreeNodeProvider {
       module: this,
       name: 'bus',
       protocol: protocol,
-      addressWidth: 3,
-      dataWidth: 8,
+      addressWidth: busAddressWidth ?? 3,
+      dataWidth: busDataWidth ?? 8,
     );
 
     final clk = input('clk');
     final reset = input('reset');
-    final addr = bus.addr;
-    final datIn = bus.dataIn;
-    final datOut = bus.dataOut;
+    // Use only the lower 3 bits of address and 8 bits of data
+    final addr = bus.addr.getRange(0, 3);
+    final datIn = bus.dataIn.getRange(0, 8);
+    final datOut8 = Logic(name: 'uart_dat_out', width: 8);
+    bus.dataOut <= datOut8.zeroExtend(bus.dataOut.width);
     final ack = bus.ack;
     final stb = bus.stb;
     final we = bus.we;
@@ -141,7 +145,7 @@ class HarborUart extends BridgeModule with HarborDeviceTreeNodeProvider {
           rxReady < Const(0),
           baudCount < Const(0, width: 16),
           ack < Const(0),
-          datOut < Const(0, width: 8),
+          datOut8 < Const(0, width: 8),
         ],
         orElse: [
           // Baud counter
@@ -178,7 +182,7 @@ class HarborUart extends BridgeModule with HarborDeviceTreeNodeProvider {
 
           // Bus access
           ack < Const(0),
-          datOut < Const(0, width: 8),
+          datOut8 < Const(0, width: 8),
 
           If(
             stb & ~ack,
@@ -191,13 +195,13 @@ class HarborUart extends BridgeModule with HarborDeviceTreeNodeProvider {
                   If(
                     dlab,
                     then: [
-                      If(we, then: [dll < datIn], orElse: [datOut < dll]),
+                      If(we, then: [dll < datIn], orElse: [datOut8 < dll]),
                     ],
                     orElse: [
                       If(
                         we,
                         then: [txHolding < datIn, txHoldingFull < Const(1)],
-                        orElse: [datOut < rxData, rxReady < Const(0)],
+                        orElse: [datOut8 < rxData, rxReady < Const(0)],
                       ),
                     ],
                   ),
@@ -207,32 +211,32 @@ class HarborUart extends BridgeModule with HarborDeviceTreeNodeProvider {
                   If(
                     dlab,
                     then: [
-                      If(we, then: [dlm < datIn], orElse: [datOut < dlm]),
+                      If(we, then: [dlm < datIn], orElse: [datOut8 < dlm]),
                     ],
                     orElse: [
-                      If(we, then: [ier < datIn], orElse: [datOut < ier]),
+                      If(we, then: [ier < datIn], orElse: [datOut8 < ier]),
                     ],
                   ),
                 ]),
                 // 0x2: IIR/FCR
                 CaseItem(Const(2, width: 3), [
-                  If(we, then: [fcr < datIn], orElse: [datOut < computedIir]),
+                  If(we, then: [fcr < datIn], orElse: [datOut8 < computedIir]),
                 ]),
                 // 0x3: LCR
                 CaseItem(Const(3, width: 3), [
-                  If(we, then: [lcr < datIn], orElse: [datOut < lcr]),
+                  If(we, then: [lcr < datIn], orElse: [datOut8 < lcr]),
                 ]),
                 // 0x4: MCR
                 CaseItem(Const(4, width: 3), [
-                  If(we, then: [mcr < datIn], orElse: [datOut < mcr]),
+                  If(we, then: [mcr < datIn], orElse: [datOut8 < mcr]),
                 ]),
                 // 0x5: LSR (read-only)
-                CaseItem(Const(5, width: 3), [datOut < lsr]),
+                CaseItem(Const(5, width: 3), [datOut8 < lsr]),
                 // 0x6: MSR (read-only stub)
-                CaseItem(Const(6, width: 3), [datOut < Const(0, width: 8)]),
+                CaseItem(Const(6, width: 3), [datOut8 < Const(0, width: 8)]),
                 // 0x7: SCR
                 CaseItem(Const(7, width: 3), [
-                  If(we, then: [scr < datIn], orElse: [datOut < scr]),
+                  If(we, then: [scr < datIn], orElse: [datOut8 < scr]),
                 ]),
               ]),
             ],

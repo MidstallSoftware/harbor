@@ -108,6 +108,42 @@ class Sky130Provider extends PdkProvider {
   );
 
   @override
+  bool get hasSramMacro => true;
+
+  @override
+  AnalogBlock? sramMacro({
+    required int words,
+    required int width,
+    int numPorts = 1,
+  }) {
+    // OpenRAM-generated Sky130 SRAM macros
+    // Common sizes: 256x32, 512x32, 1024x32, 2048x32
+    final macroName = 'sky130_sram_${numPorts}rw1r_${words}_${width}_8';
+    return AnalogBlock(
+      symbolPath: '$pdkRoot/libs.ref/sky130_sram_macros/lef/$macroName.lef',
+      pinMapping: {
+        'clk': 'clk0',
+        'addr': 'addr0',
+        'dataIn': 'din0',
+        'dataOut': 'dout0',
+        'writeEnable': 'web0',
+        'chipSelect': 'csb0',
+        if (numPorts > 1) ...{
+          'addr1': 'addr1',
+          'dataOut1': 'dout1',
+          'chipSelect1': 'csb1',
+        },
+      },
+      properties: {
+        'name': macroName,
+        'words': '$words',
+        'width': '$width',
+        'ports': '$numPorts',
+      },
+    );
+  }
+
+  @override
   bool get hasEfuse => true;
 
   @override

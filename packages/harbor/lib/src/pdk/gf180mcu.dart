@@ -112,6 +112,35 @@ class Gf180mcuProvider extends PdkProvider {
   );
 
   @override
+  bool get hasSramMacro => true;
+
+  @override
+  AnalogBlock? sramMacro({
+    required int words,
+    required int width,
+    int numPorts = 1,
+  }) {
+    final macroName = 'gf180mcu_fd_ip_sram__sram${words}x${width}m8wm1';
+    return AnalogBlock(
+      symbolPath: '$pdkRoot/libs.ref/gf180mcu_fd_ip_sram/lef/$macroName.lef',
+      pinMapping: {
+        'clk': 'CLK',
+        'addr': 'A',
+        'dataIn': 'D',
+        'dataOut': 'Q',
+        'writeEnable': 'WEN',
+        'chipSelect': 'CEN',
+      },
+      properties: {
+        'name': macroName,
+        'words': '$words',
+        'width': '$width',
+        'ports': '$numPorts',
+      },
+    );
+  }
+
+  @override
   bool get hasEfuse => true;
 
   @override

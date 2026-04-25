@@ -55,6 +55,34 @@ class HarborMemoryPortInterface extends PairInterface {
       HarborMemoryPortInterface(dataWidth: dataWidth, addrWidth: addrWidth);
 }
 
+/// A sized memory port interface with access-size control.
+///
+/// Extends [HarborMemoryPortInterface] with a `size` port that
+/// encodes the access width as log2(bytes): 0=byte, 1=half, 2=word,
+/// 3=dword. Used between CPU pipeline stages and the MMU, where the
+/// MMU translates `size` into bus-specific byte-lane selection
+/// (e.g. Wishbone SEL).
+class HarborSizedMemoryPortInterface extends HarborMemoryPortInterface {
+  final int sizeWidth;
+
+  Logic get size => port('size');
+
+  HarborSizedMemoryPortInterface({
+    required super.dataWidth,
+    required super.addrWidth,
+    this.sizeWidth = 3,
+  }) : super() {
+    setPorts([Logic.port('size', sizeWidth)], [PairDirection.fromProvider]);
+  }
+
+  @override
+  HarborSizedMemoryPortInterface clone() => HarborSizedMemoryPortInterface(
+    dataWidth: dataWidth,
+    addrWidth: addrWidth,
+    sizeWidth: sizeWidth,
+  );
+}
+
 /// Memory access type.
 enum HarborMemoryAccessType {
   /// Instruction fetch.

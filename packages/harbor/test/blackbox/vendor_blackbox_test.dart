@@ -1,10 +1,17 @@
 import 'package:harbor/harbor.dart';
+import 'package:rohd/rohd.dart';
 import 'package:test/test.dart';
 
 void main() {
   group('ECP5', () {
     test('Ecp5Ehxplll creates', () {
-      final pll = Ecp5Ehxplll(clkiDiv: 1, clkfbDiv: 4, clkopDiv: 12);
+      final pll = Ecp5Ehxplll(
+        clkiDiv: 1,
+        clkfbDiv: 4,
+        clkopDiv: 12,
+        clk: Logic(),
+        clkfb: Logic(),
+      );
       expect(pll, isNotNull);
       expect(pll.definitionName, equals('EHXPLLL'));
     });

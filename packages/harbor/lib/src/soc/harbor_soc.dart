@@ -1,9 +1,12 @@
 import 'dart:io';
 
+import 'package:rohd/rohd.dart';
 import 'package:rohd_bridge/rohd_bridge.dart';
 
 import '../bus/bus.dart';
+import '../bus/wishbone/wishbone_decoder.dart';
 import '../bus/wishbone/wishbone_interface.dart';
+import '../clock/clock_domain.dart';
 import '../pdk/klayout.dart';
 import 'device_tree.dart';
 import 'graph.dart';
@@ -49,7 +52,7 @@ class HarborSoC extends BridgeModule {
   final String compatible;
 
   /// Bus configuration for the fabric.
-  final WishboneConfig busConfig;
+  final Object busConfig;
 
   /// CPU information for the device tree.
   final List<HarborDeviceTreeCpu> cpus;
@@ -60,16 +63,60 @@ class HarborSoC extends BridgeModule {
   final List<_PeripheralEntry> _peripherals = [];
   final List<_MasterEntry> _masters = [];
 
+  late final HarborClockGenerator _clockGen;
+  final Map<String, HarborClockDomain> _clockDomains = {};
+
   /// Creates a new SoC.
+  ///
+  /// Accepts an optional list of [clocks] to generate PLL-derived
+  /// clock domains. If empty, the external `clk` input is used directly.
   HarborSoC({
     required String name,
     required this.compatible,
     required this.busConfig,
     this.cpus = const [],
     this.target,
+    List<HarborClockConfig> clocks = const [],
   }) : super(name, name: name) {
     createPort('clk', PortDirection.input);
-    createPort('reset', PortDirection.input);
+
+    final hasClockDomains = clocks.isNotEmpty;
+
+    // External reset only if no PLL-derived clock domains
+    if (!hasClockDomains) {
+      createPort('reset', PortDirection.input);
+    }
+
+    final resetSignal = hasClockDomains ? Const(0) : input('reset');
+
+    _clockGen = HarborClockGenerator(
+      parent: this,
+      inputClk: input('clk'),
+      inputReset: resetSignal,
+      target: target,
+    );
+
+    for (final clkConfig in clocks) {
+      _clockDomains[clkConfig.name] = _clockGen.createDomain(clkConfig);
+    }
+  }
+
+  /// Gets a clock domain by name.
+  ///
+  /// Returns null if no domain with that name exists. Falls back to
+  /// the raw `clk`/`reset` inputs if no domains were configured.
+  HarborClockDomain? clockDomain(String name) => _clockDomains[name];
+
+  /// The default clock and reset signals.
+  ///
+  /// If clock domains are configured, returns the first domain.
+  /// Otherwise returns the raw input clock and reset.
+  (Logic clk, Logic reset) get defaultClock {
+    if (_clockDomains.isNotEmpty) {
+      final first = _clockDomains.values.first;
+      return (first.clk, first.reset);
+    }
+    return (input('clk'), input('reset'));
   }
 
   /// All registered peripherals.
@@ -86,7 +133,10 @@ class HarborSoC extends BridgeModule {
   ///
   /// Clock and reset are auto-wired. The bus interface is connected
   /// when [buildFabric] is called.
-  T addPeripheral<T extends BridgeModule>(T peripheral) {
+  T addPeripheral<T extends BridgeModule>(
+    T peripheral, {
+    String? clockDomainName,
+  }) {
     if (peripheral is! HarborDeviceTreeNodeProvider) {
       throw ArgumentError(
         'Peripheral ${peripheral.name} must implement '
@@ -101,9 +151,19 @@ class HarborSoC extends BridgeModule {
       _PeripheralEntry(module: peripheral, addressRange: dt.reg),
     );
 
-    // Auto-wire clock and reset
-    connectPorts(port('clk'), peripheral.port('clk'));
-    connectPorts(port('reset'), peripheral.port('reset'));
+    // Wire clock and reset from the specified domain or default
+    final (
+      clk,
+      reset,
+    ) = clockDomainName != null && _clockDomains.containsKey(clockDomainName)
+        ? (
+            _clockDomains[clockDomainName]!.clk,
+            _clockDomains[clockDomainName]!.reset,
+          )
+        : defaultClock;
+
+    peripheral.input('clk').srcConnection! <= clk;
+    peripheral.input('reset').srcConnection! <= reset;
 
     return peripheral;
   }
@@ -117,14 +177,25 @@ class HarborSoC extends BridgeModule {
   T addMaster<T extends BridgeModule>(
     T master, {
     String busInterfaceName = 'dataBus',
+    String? clockDomainName,
   }) {
     addSubModule(master);
     _masters.add(
       _MasterEntry(module: master, busInterfaceName: busInterfaceName),
     );
 
-    connectPorts(port('clk'), master.port('clk'));
-    connectPorts(port('reset'), master.port('reset'));
+    final (
+      clk,
+      reset,
+    ) = clockDomainName != null && _clockDomains.containsKey(clockDomainName)
+        ? (
+            _clockDomains[clockDomainName]!.clk,
+            _clockDomains[clockDomainName]!.reset,
+          )
+        : defaultClock;
+
+    master.input('clk').srcConnection! <= clk;
+    master.input('reset').srcConnection! <= reset;
 
     return master;
   }
@@ -169,21 +240,41 @@ class HarborSoC extends BridgeModule {
       );
     }
 
-    // For each master, connect its bus to all peripherals via
-    // rohd_bridge's connectInterfaces
     for (final masterEntry in _masters) {
-      final masterIntf = masterEntry.module.interface(
-        masterEntry.busInterfaceName,
-      );
-
-      // Connect master bus to each peripheral's bus
-      // The address decoding is handled by the peripherals themselves
-      // when they check their address range against the incoming address.
-      // We use pullUpInterface to expose each peripheral's bus at
-      // this SoC level and connect them.
-      for (final periEntry in _peripherals) {
-        connectInterfaces(masterIntf, periEntry.module.interface('bus'));
+      switch (busConfig) {
+        case WishboneConfig wbConfig:
+          _buildWishboneFabric(masterEntry, wbConfig);
+        default:
+          throw UnsupportedError(
+            'Bus protocol ${busConfig.runtimeType} not yet supported in buildFabric',
+          );
       }
+    }
+  }
+
+  void _buildWishboneFabric(_MasterEntry masterEntry, WishboneConfig wbConfig) {
+    final mappings = _peripherals.indexed
+        .map(
+          (e) =>
+              HarborAddressMapping(range: e.$2.addressRange, slaveIndex: e.$1),
+        )
+        .toList();
+
+    final decoder = WishboneDecoder(wbConfig, mappings);
+    addSubModule(decoder);
+
+    // Connect master's bus to decoder's master interface
+    connectInterfaces(
+      masterEntry.module.interface(masterEntry.busInterfaceName),
+      decoder.interface('master'),
+    );
+
+    // Connect decoder's slave interfaces to peripherals
+    for (var i = 0; i < _peripherals.length; i++) {
+      connectInterfaces(
+        decoder.interface('slave_$i'),
+        _peripherals[i].module.interface('bus'),
+      );
     }
   }
 
@@ -258,7 +349,17 @@ class HarborSoC extends BridgeModule {
           File(
             '$path/$name.${t.constraintExtension}',
           ).writeAsStringSync(t.generateConstraints());
-          File('$path/synth.tcl').writeAsStringSync(t.generateYosysTcl(name));
+          final rtlDir = Directory('$path/rtl');
+          final svFiles = rtlDir.existsSync()
+              ? rtlDir
+                    .listSync()
+                    .where((f) => f.path.endsWith('.sv'))
+                    .map((f) => 'rtl/${f.uri.pathSegments.last}')
+                    .toList()
+              : <String>[];
+          File(
+            '$path/synth.tcl',
+          ).writeAsStringSync(t.generateYosysTcl(name, svFiles: svFiles));
           File('$path/Makefile').writeAsStringSync(t.generateMakefile(name));
         case HarborAsicTarget():
           File('$path/$name.sdc').writeAsStringSync(t.generateSdc());
