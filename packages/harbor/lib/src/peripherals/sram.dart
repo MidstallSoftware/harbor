@@ -27,7 +27,7 @@ class HarborSram extends BridgeModule with HarborDeviceTreeNodeProvider {
     BusProtocol protocol = BusProtocol.wishbone,
     HarborDeviceTarget? target,
     String? name,
-  }) : super('HarborSram', name: name ?? 'sram') {
+  }) : super('HarborSram_${size}', name: name ?? 'sram') {
     createPort('clk', PortDirection.input);
     createPort('reset', PortDirection.input);
 
