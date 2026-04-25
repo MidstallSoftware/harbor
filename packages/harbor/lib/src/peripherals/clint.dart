@@ -35,6 +35,8 @@ class HarborClint extends BridgeModule with HarborDeviceTreeNodeProvider {
   HarborClint({
     required this.baseAddress,
     this.hartCount = 1,
+    int? busAddressWidth,
+    int? busDataWidth,
     BusProtocol protocol = BusProtocol.wishbone,
     String? name,
   }) : super('HarborClint', name: name ?? 'clint') {
@@ -45,15 +47,16 @@ class HarborClint extends BridgeModule with HarborDeviceTreeNodeProvider {
       module: this,
       name: 'bus',
       protocol: protocol,
-      addressWidth: 16,
-      dataWidth: 32,
+      addressWidth: busAddressWidth ?? 16,
+      dataWidth: busDataWidth ?? 32,
     );
 
     final clk = input('clk');
     final reset = input('reset');
-    final addr = bus.addr;
-    final datIn = bus.dataIn;
-    final datOut = bus.dataOut;
+    final addr = bus.addr.getRange(0, 16);
+    final datIn32 = bus.dataIn.getRange(0, 32);
+    final datOut32 = Logic(name: 'clint_dat_out', width: 32);
+    bus.dataOut <= datOut32.zeroExtend(bus.dataOut.width);
     final ack = bus.ack;
     final stb = bus.stb;
     final we = bus.we;
@@ -83,12 +86,12 @@ class HarborClint extends BridgeModule with HarborDeviceTreeNodeProvider {
             msip[i] < Const(0),
           ],
           ack < Const(0),
-          datOut < Const(0, width: 32),
+          datOut32 < Const(0, width: 32),
         ],
         orElse: [
           mtime < mtime + Const(1, width: 64),
           ack < Const(0),
-          datOut < Const(0, width: 32),
+          datOut32 < Const(0, width: 32),
 
           If(
             stb & ~ack,
@@ -101,8 +104,8 @@ class HarborClint extends BridgeModule with HarborDeviceTreeNodeProvider {
                   then: [
                     If(
                       we,
-                      then: [msip[i] < datIn[0]],
-                      orElse: [datOut < msip[i].zeroExtend(32)],
+                      then: [msip[i] < datIn32[0]],
+                      orElse: [datOut32 < msip[i].zeroExtend(32)],
                     ),
                   ],
                 ),
@@ -118,9 +121,9 @@ class HarborClint extends BridgeModule with HarborDeviceTreeNodeProvider {
                         mtimecmp[i] <
                             mtimecmp[i] &
                                     (Const(0xFFFFFFFF00000000, width: 64)) |
-                                (datIn.zeroExtend(64)),
+                                (datIn32.zeroExtend(64)),
                       ],
-                      orElse: [datOut < mtimecmp[i].getRange(0, 32)],
+                      orElse: [datOut32 < mtimecmp[i].getRange(0, 32)],
                     ),
                   ],
                 ),
@@ -133,9 +136,10 @@ class HarborClint extends BridgeModule with HarborDeviceTreeNodeProvider {
                         mtimecmp[i] <
                             mtimecmp[i] &
                                     (Const(0x00000000FFFFFFFF, width: 64)) |
-                                (datIn.zeroExtend(64) << Const(32, width: 64)),
+                                (datIn32.zeroExtend(64) <<
+                                    Const(32, width: 64)),
                       ],
-                      orElse: [datOut < mtimecmp[i].getRange(32, 64)],
+                      orElse: [datOut32 < mtimecmp[i].getRange(32, 64)],
                     ),
                   ],
                 ),
@@ -143,11 +147,11 @@ class HarborClint extends BridgeModule with HarborDeviceTreeNodeProvider {
 
               If(
                 addr.eq(Const(0xBFF8, width: 16)),
-                then: [datOut < mtime.getRange(0, 32)],
+                then: [datOut32 < mtime.getRange(0, 32)],
               ),
               If(
                 addr.eq(Const(0xBFFC, width: 16)),
-                then: [datOut < mtime.getRange(32, 64)],
+                then: [datOut32 < mtime.getRange(32, 64)],
               ),
             ],
           ),

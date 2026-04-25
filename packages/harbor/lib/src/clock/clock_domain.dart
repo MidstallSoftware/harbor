@@ -331,9 +331,9 @@ class HarborClockGenerator {
       ),
     );
 
-    pll.input('REFERENCECLK') <= inputClk;
-    pll.input('RESETB') <= Const(1);
-    pll.input('BYPASS') <= Const(0);
+    pll.input('REFERENCECLK').srcConnection! <= inputClk;
+    pll.input('RESETB').srcConnection! <= Const(1);
+    pll.input('BYPASS').srcConnection! <= Const(0);
 
     final pllClk = pll.output('PLLOUTGLOBAL');
     final pllLock = pll.output('LOCK');
@@ -397,15 +397,15 @@ class HarborClockGenerator {
       ),
     );
 
-    mmcm.input('CLKIN1') <= inputClk;
-    mmcm.input('CLKIN2') <= Const(0);
-    mmcm.input('CLKINSEL') <= Const(1);
-    mmcm.input('CLKFBIN') <= mmcm.output('CLKFBOUT');
-    mmcm.input('RST') <= Const(0);
-    mmcm.input('PWRDWN') <= Const(0);
+    mmcm.input('CLKIN1').srcConnection! <= inputClk;
+    mmcm.input('CLKIN2').srcConnection! <= Const(0);
+    mmcm.input('CLKINSEL').srcConnection! <= Const(1);
+    mmcm.input('CLKFBIN').srcConnection! <= mmcm.output('CLKFBOUT');
+    mmcm.input('RST').srcConnection! <= Const(0);
+    mmcm.input('PWRDWN').srcConnection! <= Const(0);
 
     final bufg = parent.addSubModule(XilinxBufg(name: '${config.name}_bufg'));
-    bufg.input('I') <= mmcm.output('CLKOUT0');
+    bufg.input('I').srcConnection! <= mmcm.output('CLKOUT0');
 
     final domain = HarborClockDomain(
       config: config,

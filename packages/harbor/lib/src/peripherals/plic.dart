@@ -32,6 +32,8 @@ class HarborPlic extends BridgeModule with HarborDeviceTreeNodeProvider {
     this.sources = 32,
     this.contexts = 1,
     this.priorityBits = 3,
+    int? busAddressWidth,
+    int? busDataWidth,
     BusProtocol protocol = BusProtocol.wishbone,
     String? name,
   }) : super('HarborPlic', name: name ?? 'plic') {
@@ -42,15 +44,16 @@ class HarborPlic extends BridgeModule with HarborDeviceTreeNodeProvider {
       module: this,
       name: 'bus',
       protocol: protocol,
-      addressWidth: 26,
-      dataWidth: 32,
+      addressWidth: busAddressWidth ?? 26,
+      dataWidth: busDataWidth ?? 32,
     );
 
     final clk = input('clk');
     final reset = input('reset');
-    final addr = bus.addr;
-    final datIn = bus.dataIn;
-    final datOut = bus.dataOut;
+    final addr = bus.addr.getRange(0, 26);
+    final datIn = bus.dataIn.getRange(0, 32);
+    final datOut32 = Logic(name: 'plic_dat_out', width: 32);
+    bus.dataOut <= datOut32.zeroExtend(bus.dataOut.width);
     final ack = bus.ack;
     final stb = bus.stb;
     final we = bus.we;
@@ -105,14 +108,14 @@ class HarborPlic extends BridgeModule with HarborDeviceTreeNodeProvider {
             for (var src = 0; src < sources; src++) enable[ctx][src] < Const(0),
           ],
           ack < Const(0),
-          datOut < Const(0, width: 32),
+          datOut32 < Const(0, width: 32),
         ],
         orElse: [
           for (var i = 0; i < sources; i++)
             If(sourceInterrupt[i] & ~claimed[i], then: [pending[i] < Const(1)]),
 
           ack < Const(0),
-          datOut < Const(0, width: 32),
+          datOut32 < Const(0, width: 32),
 
           If(
             stb & ~ack,
@@ -126,7 +129,7 @@ class HarborPlic extends BridgeModule with HarborDeviceTreeNodeProvider {
                     If(
                       we,
                       then: [priority[src] < datIn.getRange(0, priorityBits)],
-                      orElse: [datOut < priority[src].zeroExtend(32)],
+                      orElse: [datOut32 < priority[src].zeroExtend(32)],
                     ),
                   ],
                 ),
@@ -134,7 +137,7 @@ class HarborPlic extends BridgeModule with HarborDeviceTreeNodeProvider {
               If(
                 addr.eq(Const(0x1000, width: 26)),
                 then: [
-                  datOut <
+                  datOut32 <
                       [
                         for (
                           var src = (sources > 32 ? 31 : sources - 1);
@@ -157,7 +160,7 @@ class HarborPlic extends BridgeModule with HarborDeviceTreeNodeProvider {
                           enable[ctx][src] < datIn[src],
                       ],
                       orElse: [
-                        datOut <
+                        datOut32 <
                             [
                               for (
                                 var src = (sources > 32 ? 31 : sources - 1);
@@ -178,7 +181,7 @@ class HarborPlic extends BridgeModule with HarborDeviceTreeNodeProvider {
                     If(
                       we,
                       then: [threshold[ctx] < datIn.getRange(0, priorityBits)],
-                      orElse: [datOut < threshold[ctx].zeroExtend(32)],
+                      orElse: [datOut32 < threshold[ctx].zeroExtend(32)],
                     ),
                   ],
                 ),
@@ -206,7 +209,7 @@ class HarborPlic extends BridgeModule with HarborDeviceTreeNodeProvider {
                           If(
                             pending[src] & enable[ctx][src] & ~claimed[src],
                             then: [
-                              datOut < Const(src, width: 32),
+                              datOut32 < Const(src, width: 32),
                               claimed[src] < Const(1),
                             ],
                           ),
