@@ -219,15 +219,15 @@ class HarborSram extends BridgeModule with HarborDeviceTreeNodeProvider {
       final spram = Ice40SbSpram256ka(name: 'spram_0');
       addSubModule(spram);
 
-      spram.input('CLOCK') <= clk;
-      spram.input('CHIPSELECT') <= Const(1);
-      spram.input('STANDBY') <= Const(0);
-      spram.input('SLEEP') <= Const(0);
-      spram.input('POWEROFF') <= Const(1);
-      spram.input('ADDRESS') <= wordAddr.zeroExtend(14);
-      spram.input('DATAIN') <= datIn.zeroExtend(16);
-      spram.input('WREN') <= stb & we;
-      spram.input('MASKWREN') <= Const(0xF, width: 4);
+      spram.input('CLOCK').srcConnection! <= clk;
+      spram.input('CHIPSELECT').srcConnection! <= Const(1);
+      spram.input('STANDBY').srcConnection! <= Const(0);
+      spram.input('SLEEP').srcConnection! <= Const(0);
+      spram.input('POWEROFF').srcConnection! <= Const(1);
+      spram.input('ADDRESS').srcConnection! <= wordAddr.zeroExtend(14);
+      spram.input('DATAIN').srcConnection! <= datIn.zeroExtend(16);
+      spram.input('WREN').srcConnection! <= stb & we;
+      spram.input('MASKWREN').srcConnection! <= Const(0xF, width: 4);
 
       datOut <= spram.output('DATAOUT').getRange(0, dataWidth);
 
@@ -288,11 +288,11 @@ class HarborSram extends BridgeModule with HarborDeviceTreeNodeProvider {
     final wePin = macro.pinMapping['writeEnable'] ?? 'writeEnable';
     final csPin = macro.pinMapping['chipSelect'] ?? 'chipSelect';
 
-    sramBlock.input(clkPin) <= clk;
-    sramBlock.input(addrPin) <= wordAddr;
-    sramBlock.input(dataInPin) <= datIn;
-    sramBlock.input(wePin) <= stb & we;
-    sramBlock.input(csPin) <= stb;
+    sramBlock.input(clkPin).srcConnection! <= clk;
+    sramBlock.input(addrPin).srcConnection! <= wordAddr;
+    sramBlock.input(dataInPin).srcConnection! <= datIn;
+    sramBlock.input(wePin).srcConnection! <= stb & we;
+    sramBlock.input(csPin).srcConnection! <= stb;
 
     datOut <= sramBlock.output(dataOutPin);
 

@@ -139,16 +139,17 @@ class HarborTemperatureSensor extends BridgeModule
     switch (source) {
       case HarborTemperatureSource.xilinxXadc:
         xadc = XilinxXadc(name: 'xadc_temp');
-        xadc!.input('DCLK') <= clk;
-        xadc!.input('RESET') <= reset;
-        xadc!.input('DEN') <= Const(1);
-        xadc!.input('DWE') <= Const(0);
-        xadc!.input('DADDR') <= Const(0, width: 7); // channel 0 = temp
-        xadc!.input('DI') <= Const(0, width: 16);
-        xadc!.input('CONVST') <= Const(0);
-        xadc!.input('CONVSTCLK') <= Const(0);
-        xadc!.input('VP') <= Const(0);
-        xadc!.input('VN') <= Const(0);
+        xadc!.input('DCLK').srcConnection! <= clk;
+        xadc!.input('RESET').srcConnection! <= reset;
+        xadc!.input('DEN').srcConnection! <= Const(1);
+        xadc!.input('DWE').srcConnection! <= Const(0);
+        xadc!.input('DADDR').srcConnection! <=
+            Const(0, width: 7); // channel 0 = temp
+        xadc!.input('DI').srcConnection! <= Const(0, width: 16);
+        xadc!.input('CONVST').srcConnection! <= Const(0);
+        xadc!.input('CONVSTCLK').srcConnection! <= Const(0);
+        xadc!.input('VP').srcConnection! <= Const(0);
+        xadc!.input('VN').srcConnection! <= Const(0);
         // XADC DO[15:4] is the 12-bit result
         tempRawIn = xadc!.output('DO').getRange(4, 16);
         tempValidIn = xadc!.output('DRDY');
@@ -172,7 +173,7 @@ class HarborTemperatureSensor extends BridgeModule
             ],
           ),
         ]);
-        dtr!.input('STARTPULSE') <= startPulse;
+        dtr!.input('STARTPULSE').srcConnection! <= startPulse;
         // DTR provides 8-bit result, zero-extend to 12
         tempRawIn = dtr!.output('DTROUT8').zeroExtend(12);
         // Valid one cycle after start pulse (simplified)

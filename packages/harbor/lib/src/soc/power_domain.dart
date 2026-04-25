@@ -123,14 +123,15 @@ class HarborPowerDomainIntegration {
         (d) => d.index == domain,
       );
       if (domainListIdx >= 0) {
-        gate.input('enable') <= pmu.domainPower[domainListIdx];
+        gate.input('enable').srcConnection! <= pmu.domainPower[domainListIdx];
       } else {
-        gate.input('enable') <= Const(1); // always on if not in PMU
+        gate.input('enable').srcConnection! <=
+            Const(1); // always on if not in PMU
       }
       if (testEnable != null) {
-        gate.input('test_enable') <= testEnable;
+        gate.input('test_enable').srcConnection! <= testEnable;
       } else {
-        gate.input('test_enable') <= Const(0);
+        gate.input('test_enable').srcConnection! <= Const(0);
       }
 
       _clockGates[domain] = gate;
