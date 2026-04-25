@@ -332,6 +332,12 @@ class HarborSoC extends BridgeModule {
     // RTL generation via rohd_bridge
     await buildAndGenerateRTL(outputPath: path);
 
+    // Generate blackbox stubs for leaf modules (SRAM macros, etc.)
+    final blackboxStubs = _generateBlackboxStubs();
+    if (blackboxStubs.isNotEmpty) {
+      File('$path/blackboxes.v').writeAsStringSync(blackboxStubs);
+    }
+
     // Device tree
     File('$path/$name.dts').writeAsStringSync(generateDts());
 
@@ -422,6 +428,55 @@ class HarborSoC extends BridgeModule {
             '$path/klayout/lvs.py',
           ).writeAsStringSync(klayout.generateLvs(gdsPath: '${t.topCell}.gds'));
       }
+    }
+  }
+
+  /// Generates Verilog blackbox stubs for all SystemVerilog leaf modules.
+  ///
+  /// These are hard IP blocks (SRAM macros, PLLs, etc.) that have no
+  /// ROHD-generated definition. The stubs let Yosys recognize the
+  /// module interfaces during synthesis.
+  String _generateBlackboxStubs() {
+    final leafModules = <BridgeModule>[];
+    _collectLeafModules(this, leafModules);
+    if (leafModules.isEmpty) return '';
+
+    final buf = StringBuffer();
+    buf.writeln('// Auto-generated blackbox stubs for synthesis');
+    final seen = <String>{};
+    for (final mod in leafModules) {
+      if (!seen.add(mod.definitionName)) continue;
+
+      buf.writeln('(* blackbox *)');
+      buf.write('module ${mod.definitionName}(');
+
+      final ports = <String>[];
+      for (final entry in mod.inputs.entries) {
+        final w = entry.value.width;
+        ports.add(
+          w > 1 ? 'input [${w - 1}:0] ${entry.key}' : 'input ${entry.key}',
+        );
+      }
+      for (final entry in mod.outputs.entries) {
+        final w = entry.value.width;
+        ports.add(
+          w > 1 ? 'output [${w - 1}:0] ${entry.key}' : 'output ${entry.key}',
+        );
+      }
+      buf.writeln(ports.join(', '));
+      buf.writeln(');');
+      buf.writeln('endmodule');
+      buf.writeln();
+    }
+    return buf.toString();
+  }
+
+  static void _collectLeafModules(Module mod, List<BridgeModule> result) {
+    if (mod is BridgeModule && mod.isSystemVerilogLeaf) {
+      result.add(mod);
+    }
+    for (final sub in mod.subModules) {
+      _collectLeafModules(sub, result);
     }
   }
 }
