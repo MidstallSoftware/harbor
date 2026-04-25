@@ -453,11 +453,6 @@ class HarborAsicTarget extends HarborDeviceTarget {
     buf.writeln();
     buf.writeln('read_verilog -sv rtl/*.sv');
 
-    // Read PDK Verilog models if available
-    if (lib.verilogPath != null) {
-      buf.writeln('read_verilog -lib ${lib.verilogPath}');
-    }
-
     // Read blackbox stubs for hard macros (SRAM, etc.)
     buf.writeln('catch { read_verilog -lib blackboxes.v }');
 
