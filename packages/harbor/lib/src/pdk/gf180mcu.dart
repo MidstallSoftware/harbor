@@ -45,7 +45,7 @@ class Gf180mcuProvider extends PdkProvider {
     libertyPath:
         '$pdkRoot/libs.ref/$_libName/lib/${_libName}__tt_025C_3v30.lib',
     lefPath: '$pdkRoot/libs.ref/$_libName/lef/$_libName.lef',
-    techLefPath: '$pdkRoot/libs.ref/$_libName/techlef/${_libName}__nom.tlef',
+    techLefPath: '$pdkRoot/libs.ref/$_libName/lef/${_libName}__nom.tlef',
     verilogPath: '$pdkRoot/libs.ref/$_libName/verilog/$_libName.v',
     cellPrefix: '${_libName}__',
     siteName: 'GF018hv5v_mcu_sc7',
