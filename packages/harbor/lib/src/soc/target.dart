@@ -454,7 +454,7 @@ class HarborAsicTarget extends HarborDeviceTarget {
     buf.writeln('read_verilog -sv rtl/*.sv');
 
     // Read blackbox stubs for hard macros (SRAM, etc.)
-    buf.writeln('catch { read_verilog -lib blackboxes.v }');
+    buf.writeln('read_verilog -lib blackboxes.v');
 
     // In hierarchical mode, replace macros with blackbox stubs
     if (isHierarchical) {
